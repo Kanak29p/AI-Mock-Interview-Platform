@@ -46,7 +46,7 @@ export default function CTA() {
               <ArrowRight className="ml-2 h-5 w-5 text-slate-900" />
             </Link>
             <Link
-              href="#signin"
+              href="/login"
               className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl border border-slate-700 bg-transparent px-6 py-3.5 text-base font-semibold text-white hover:bg-slate-800/50 hover:border-slate-600 transition-all"
             >
               <LogIn className="mr-2 h-5 w-5 text-slate-400" />
