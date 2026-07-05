@@ -10,7 +10,7 @@
   --popover: #ffffff;
   --popover-foreground: #0f172a;
   
-  --primary: #2563eb;
+  --primary: #1d4ed8; /* Darker blue (Blue 700) */
   --primary-foreground: #ffffff;
   
   --secondary: #f8fafc;
@@ -20,14 +20,14 @@
   --muted-foreground: #64748b;
   
   --accent: #eff6ff;
-  --accent-foreground: #1e40af;
+  --accent-foreground: #1e3a8a; /* Darker blue (Blue 900) */
   
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   
   --border: #e2e8f0;
   --input: #f1f5f9;
-  --ring: #3b82f6;
+  --ring: #2563eb; /* Darker blue (Blue 600) */
   
   --radius: 0.75rem;
 }
@@ -52,6 +52,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  
+  /* Make standard Tailwind blue palette darker */
+  --color-blue-500: #2563eb; /* default blue-600 */
+  --color-blue-600: #1d4ed8; /* default blue-700 (one shade darker) */
+  --color-blue-700: #1e40af; /* default blue-800 (two shades darker) */
+  --color-blue-800: #1e3a8a; /* default blue-900 */
+  --color-blue-900: #172554;
   
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
