@@ -360,7 +360,7 @@ export default function LoginPage() {
                     <p className="text-xs text-center text-slate-500 w-full">
                       Don&apos;t have an account?{" "}
                       <Link 
-                        href="#signup" 
+                        href="/signup" 
                         className="font-bold text-blue-600 hover:text-blue-700 transition-colors"
                       >
                         Create an account
