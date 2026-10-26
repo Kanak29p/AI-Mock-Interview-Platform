@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { authApi, tokenStorage } from "@/lib/api";
 
 // Custom Google SVG Logo
 const GoogleIcon = () => (
@@ -57,9 +58,10 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   
-  // Simple validation states
+  // Validation and error states
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [generalError, setGeneralError] = useState("");
 
   const validateEmail = (val: string) => {
     if (!val) {
@@ -97,16 +99,21 @@ export default function LoginPage() {
     if (!isEmailValid || !isPasswordValid) return;
 
     setIsLoading(true);
+    setGeneralError("");
 
-    // Simulate network authentication call
-    setTimeout(() => {
+    try {
+      const response = await authApi.login({ email, password });
+      tokenStorage.setAuthData(response.data.tokens, response.data.user);
       setIsLoading(false);
       setIsSuccess(true);
-      // Simulate redirection to candidate dashboard
+      // Redirect after success animation
       setTimeout(() => {
         router.push("/");
-      }, 1500);
-    }, 2000);
+      }, 1200);
+    } catch (err: any) {
+      setIsLoading(false);
+      setGeneralError(err.message || "Failed to sign in. Please verify your credentials.");
+    }
   };
 
   return (
@@ -206,6 +213,11 @@ export default function LoginPage() {
                   <CardContent className="space-y-5 pb-2">
                     {/* Email/Password Form */}
                     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                      {generalError && (
+                        <div className="p-3 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200/80 rounded-xl">
+                          {generalError}
+                        </div>
+                      )}
                       {/* Email input field */}
                       <div className="space-y-1.5">
                         <div className="flex justify-between items-baseline">

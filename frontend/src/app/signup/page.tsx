@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { authApi, tokenStorage } from "@/lib/api";
 
 // Custom Google SVG Logo
 const GoogleIcon = () => (
@@ -61,20 +62,42 @@ export default function SignupPage() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [generalError, setGeneralError] = useState("");
 
-  // Form submit simulation
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setGeneralError("");
+
+    if (password !== confirmPassword) {
+      setGeneralError("Passwords do not match");
+      return;
+    }
+
+    if (!agreeTerms) {
+      setGeneralError("Please accept the Terms of Service to continue");
+      return;
+    }
+
     setIsLoading(true);
 
-    // Simulate account creation & redirection
-    setTimeout(() => {
+    try {
+      const response = await authApi.register({
+        fullName,
+        email,
+        password,
+        role: "candidate",
+      });
+
+      tokenStorage.setAuthData(response.data.tokens, response.data.user);
       setIsLoading(false);
       setIsSuccess(true);
       setTimeout(() => {
         router.push("/login");
-      }, 2000);
-    }, 1800);
+      }, 1500);
+    } catch (err: any) {
+      setIsLoading(false);
+      setGeneralError(err.message || "Failed to create account. Please check your information.");
+    }
   };
 
   return (
@@ -313,6 +336,11 @@ export default function SignupPage() {
 
                     {/* Form Fields */}
                     <form onSubmit={handleSubmit} className="space-y-4">
+                      {generalError && (
+                        <div className="p-3 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200/80 rounded-xl">
+                          {generalError}
+                        </div>
+                      )}
                       {/* Full Name input field */}
                       <div className="space-y-1.5">
                         <Label htmlFor="fullname">Full Name</Label>
