@@ -33,6 +33,21 @@ CREATE TABLE IF NOT EXISTS resumes (
 
 CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
 
+-- 2b. Resume Chunks Table for fine-grained semantic RAG retrieval
+CREATE TABLE IF NOT EXISTS resume_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    resume_id UUID NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    chunk_index INT NOT NULL,
+    section_title VARCHAR(100),
+    content TEXT NOT NULL,
+    embedding vector(768),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_resume_chunks_resume ON resume_chunks(resume_id);
+CREATE INDEX IF NOT EXISTS idx_resume_chunks_user ON resume_chunks(user_id);
+
 -- 3. Interview Sessions Table
 CREATE TABLE IF NOT EXISTS interview_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

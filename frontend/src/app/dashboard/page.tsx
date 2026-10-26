@@ -26,6 +26,9 @@ import {
   Trash2,
   Loader2,
   FileUp,
+  Search,
+  RefreshCw,
+  HelpCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -41,6 +44,8 @@ import {
   User,
   InterviewSession,
   Resume,
+  InterviewQuestion,
+  RetrievedChunk,
 } from "@/lib/api";
 
 export default function DashboardPage() {
@@ -73,6 +78,21 @@ export default function DashboardPage() {
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [resumeUploadError, setResumeUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // RAG Semantic Search modal state
+  const [isRagModalOpen, setIsRagModalOpen] = useState(false);
+  const [activeResumeForSearch, setActiveResumeForSearch] = useState<Resume | null>(null);
+  const [ragQuery, setRagQuery] = useState("Distributed systems, caching, and database optimization");
+  const [ragResults, setRagResults] = useState<RetrievedChunk[]>([]);
+  const [isSearchingRag, setIsSearchingRag] = useState(false);
+  const [ragSearchError, setRagSearchError] = useState("");
+
+  // Questions Preview Modal state
+  const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
+  const [activeSession, setActiveSession] = useState<InterviewSession | null>(null);
+  const [sessionQuestions, setSessionQuestions] = useState<InterviewQuestion[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [isRegeneratingQuestions, setIsRegeneratingQuestions] = useState(false);
 
   // 1. Authenticate user & load initial data
   useEffect(() => {
@@ -182,11 +202,67 @@ export default function DashboardPage() {
         setIsCreateModalOpen(false);
         setCreateSuccess(false);
         setIsCreatingSession(false);
-        // Will route to active interview room in Phase 3
-      }, 1200);
+        router.push(`/interview/${res.data.interview.id}`);
+      }, 800);
     } catch (err: any) {
       setCreateError(err.message || "Failed to schedule interview session.");
       setIsCreatingSession(false);
+    }
+  };
+
+  // Handle View / Fetch Questions for a session
+  const handleViewQuestions = async (session: InterviewSession) => {
+    setActiveSession(session);
+    setIsQuestionsModalOpen(true);
+    setIsLoadingQuestions(true);
+
+    try {
+      const res = await interviewApi.getQuestions(session.id);
+      setSessionQuestions(res.data.questions);
+    } catch (err) {
+      console.error("Failed to load session questions:", err);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
+
+  // Handle Regenerate Questions using RAG
+  const handleRegenerateQuestions = async () => {
+    if (!activeSession) return;
+    setIsRegeneratingQuestions(true);
+
+    try {
+      const res = await interviewApi.generateQuestions(activeSession.id);
+      setSessionQuestions(res.data.questions);
+    } catch (err) {
+      console.error("Failed to regenerate questions:", err);
+    } finally {
+      setIsRegeneratingQuestions(false);
+    }
+  };
+
+  // Handle RAG Semantic Search
+  const handleOpenRagSearch = (resume: Resume) => {
+    setActiveResumeForSearch(resume);
+    setIsRagModalOpen(true);
+    setRagResults([]);
+    setRagSearchError("");
+  };
+
+  const handleExecuteRagSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeResumeForSearch || !ragQuery.trim()) return;
+
+    setIsSearchingRag(true);
+    setRagSearchError("");
+
+    try {
+      const res = await resumeApi.searchResume(activeResumeForSearch.id, ragQuery.trim(), 3);
+      setRagResults(res.data.matches);
+    } catch (err: any) {
+      setRagSearchError(err.message || "Semantic search failed.");
+    } finally {
+      setIsSearchingRag(false);
     }
   };
 
@@ -256,13 +332,13 @@ export default function DashboardPage() {
             <div className="space-y-2">
               <div className="inline-flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>AI Interview Readiness</span>
+                <span>AI Interview Readiness • RAG Activated</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 Welcome back, {user?.fullName?.split(" ")[0] || "Candidate"}!
               </h1>
               <p className="text-sm text-slate-400 max-w-xl">
-                Ready to sharpen your skills? Pick an interview format, attach your resume for tailored context, and practice answering realistic questions with instant AI evaluation.
+                Ready to practice? Upload your resume to extract engineering skills, index semantic vector embeddings in PostgreSQL (pgvector), and generate personalized interview questions.
               </p>
             </div>
 
@@ -403,7 +479,7 @@ export default function DashboardPage() {
                 {interviews.map((session) => (
                   <Card
                     key={session.id}
-                    className="bg-slate-900/50 border-slate-800 hover:border-slate-700/80 transition-all hover:shadow-lg hover:shadow-slate-950/50 group"
+                    className="bg-slate-900/50 border-slate-800 hover:border-slate-700/80 transition-all hover:shadow-lg hover:shadow-slate-950/50 group flex flex-col justify-between"
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
@@ -441,7 +517,7 @@ export default function DashboardPage() {
                       {session.resumeFileName && (
                         <div className="flex items-center text-xxs text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
                           <FileText className="h-3.5 w-3.5 text-blue-400 mr-1.5 shrink-0" />
-                          <span className="truncate">{session.resumeFileName}</span>
+                          <span className="truncate">{session.resumeFileName} (RAG context)</span>
                         </div>
                       )}
 
@@ -456,21 +532,29 @@ export default function DashboardPage() {
                             <span>{session.score}%</span>
                           </div>
                         ) : (
-                          <span className="text-xxs text-slate-500">Not scored</span>
+                          <span className="text-xxs text-slate-500">Scheduled</span>
                         )}
                       </div>
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full text-xs border-slate-800 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all font-medium rounded-xl cursor-pointer"
-                        onClick={() => {
-                          alert(`Ready for Phase 3! Session ID: ${session.id}`);
-                        }}
-                      >
-                        <span>{session.status === "completed" ? "Review Feedback" : "Continue Session"}</span>
-                        <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
+                          onClick={() => handleViewQuestions(session)}
+                        >
+                          <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                          <span>Questions</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl cursor-pointer"
+                          onClick={() => router.push(`/interview/${session.id}`)}
+                        >
+                          <span>Launch</span>
+                          <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -484,9 +568,9 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-base font-bold text-white">Attached Resumes</h3>
+                <h3 className="text-base font-bold text-white">Attached Resumes & Vector Embeddings</h3>
                 <p className="text-xs text-slate-400">
-                  Resumes are parsed to extract your key skills and personalize your interview questions via RAG.
+                  Resumes are chunked and stored as 768-dimension vectors in PostgreSQL (pgvector) for personalized semantic RAG retrieval.
                 </p>
               </div>
               <Button
@@ -539,7 +623,7 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {resumes.map((resume) => (
-                  <Card key={resume.id} className="bg-slate-900/40 border-slate-800">
+                  <Card key={resume.id} className="bg-slate-900/40 border-slate-800 flex flex-col justify-between">
                     <CardHeader className="pb-3 flex flex-row items-start justify-between space-y-0">
                       <div className="flex items-center space-x-3">
                         <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
@@ -550,7 +634,7 @@ export default function DashboardPage() {
                             {resume.fileName}
                           </CardTitle>
                           <CardDescription className="text-xxs text-slate-500">
-                            Added {new Date(resume.createdAt).toLocaleDateString()}
+                            Added {new Date(resume.createdAt).toLocaleDateString()} • pgvector indexed
                           </CardDescription>
                         </div>
                       </div>
@@ -562,14 +646,14 @@ export default function DashboardPage() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="space-y-4">
                       <div>
                         <span className="text-xxs uppercase tracking-wider text-slate-500 font-semibold block mb-1.5">
                           Detected Skills ({resume.parsedSkills?.length || 0})
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                           {resume.parsedSkills && resume.parsedSkills.length > 0 ? (
-                            resume.parsedSkills.map((skill, idx) => (
+                            resume.parsedSkills.slice(0, 10).map((skill, idx) => (
                               <span
                                 key={idx}
                                 className="text-xxs font-medium bg-slate-800 text-slate-300 border border-slate-700/60 px-2 py-0.5 rounded-md"
@@ -580,7 +664,22 @@ export default function DashboardPage() {
                           ) : (
                             <span className="text-xxs text-slate-500 italic">No specific tech skills detected</span>
                           )}
+                          {resume.parsedSkills && resume.parsedSkills.length > 10 && (
+                            <span className="text-xxs text-slate-500">+{resume.parsedSkills.length - 10} more</span>
+                          )}
                         </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-800/80">
+                        <Button
+                          onClick={() => handleOpenRagSearch(resume)}
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs border-slate-800 hover:bg-slate-800 text-blue-400 hover:text-blue-300 rounded-xl"
+                        >
+                          <Search className="h-3.5 w-3.5 mr-1.5" />
+                          Test Semantic Search (RAG)
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -748,7 +847,7 @@ export default function DashboardPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <Label className="text-xs font-semibold text-slate-300">
-                      4. Resume for RAG Context
+                      4. Resume for RAG Context (Semantic Retrieval)
                     </Label>
                     <button
                       type="button"
@@ -822,7 +921,7 @@ export default function DashboardPage() {
                     {isCreatingSession ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating Session...
+                        Generating Questions via RAG...
                       </>
                     ) : createSuccess ? (
                       <>
@@ -832,12 +931,214 @@ export default function DashboardPage() {
                     ) : (
                       <>
                         <Sparkles className="h-4 w-4 mr-2" />
-                        Launch Interview
+                        Generate & Launch
                       </>
                     )}
                   </Button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================== */}
+      {/* MODAL: Personalized Questions Preview                           */}
+      {/* ============================================================== */}
+      <AnimatePresence>
+        {isQuestionsModalOpen && activeSession && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-slate-100 max-h-[85vh] flex flex-col"
+            >
+              <div className="flex justify-between items-start pb-4 border-b border-slate-800">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xxs uppercase font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                      {activeSession.interviewType} Round
+                    </span>
+                    <span className="text-xxs text-slate-400">
+                      {activeSession.difficulty} • {activeSession.roleTitle}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white mt-1">Generated Interview Questions</h3>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isRegeneratingQuestions}
+                    onClick={handleRegenerateQuestions}
+                    className="border-slate-800 text-slate-300 hover:text-white text-xs"
+                    title="Regenerate questions using RAG context"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isRegeneratingQuestions ? "animate-spin" : ""}`} />
+                    Regenerate
+                  </Button>
+                  <button
+                    onClick={() => setIsQuestionsModalOpen(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1 py-4 space-y-4 pr-1">
+                {isLoadingQuestions ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <Loader2 className="h-7 w-7 animate-spin mx-auto text-blue-500 mb-2" />
+                    <p className="text-sm">Fetching personalized questions from RAG pipeline...</p>
+                  </div>
+                ) : sessionQuestions.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-sm">
+                    No questions generated yet for this session.
+                  </div>
+                ) : (
+                  sessionQuestions.map((q) => (
+                    <div
+                      key={q.id || q.questionOrder}
+                      className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between text-xxs font-semibold">
+                        <span className="text-blue-400">Question {q.questionOrder}</span>
+                        <span className="text-slate-500">{q.category}</span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-200 leading-relaxed">
+                        {q.questionText}
+                      </p>
+                      {q.expectedPoints && q.expectedPoints.length > 0 && (
+                        <div className="pt-2 border-t border-slate-900 text-xxs text-slate-400">
+                          <span className="font-semibold text-slate-500 block mb-1">Target Evaluation Points:</span>
+                          <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                            {q.expectedPoints.map((pt, idx) => (
+                              <li key={idx}>{pt}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {q.codeStarterSnippet && (
+                        <div className="mt-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 font-mono text-xxs text-emerald-300 overflow-x-auto">
+                          <pre>{q.codeStarterSnippet}</pre>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+                <span className="text-xxs text-slate-500">
+                  Questions are generated via Gemini API conditioned on your resume via pgvector semantic search.
+                </span>
+                <Button
+                  onClick={() => setIsQuestionsModalOpen(false)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs px-4"
+                >
+                  Done
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================== */}
+      {/* MODAL: Test Semantic Search (RAG Visualizer)                     */}
+      {/* ============================================================== */}
+      <AnimatePresence>
+        {isRagModalOpen && activeResumeForSearch && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-slate-100 max-h-[85vh] flex flex-col"
+            >
+              <div className="flex justify-between items-start pb-4 border-b border-slate-800">
+                <div>
+                  <div className="inline-flex items-center space-x-1.5 text-xxs font-semibold text-blue-400 uppercase tracking-wider">
+                    <Search className="h-3 w-3" />
+                    <span>pgvector Semantic Search</span>
+                  </div>
+                  <h3 className="text-base font-bold text-white mt-1">
+                    RAG Retrieval: {activeResumeForSearch.fileName}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Query your resume chunks using cosine distance vector similarity (768-dim embeddings).
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsRagModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Search Form */}
+              <form onSubmit={handleExecuteRagSearch} className="pt-4 flex gap-2">
+                <Input
+                  value={ragQuery}
+                  onChange={(e) => setRagQuery(e.target.value)}
+                  placeholder="Enter semantic topic (e.g. distributed systems, React performance, Redis)..."
+                  className="bg-slate-950 border-slate-800 text-white rounded-xl text-xs flex-1"
+                  required
+                />
+                <Button
+                  type="submit"
+                  disabled={isSearchingRag}
+                  className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold px-4 cursor-pointer"
+                >
+                  {isSearchingRag ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Search Vector DB"
+                  )}
+                </Button>
+              </form>
+
+              {ragSearchError && (
+                <div className="mt-3 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400">
+                  {ragSearchError}
+                </div>
+              )}
+
+              {/* Results Container */}
+              <div className="overflow-y-auto flex-1 py-4 space-y-3 pr-1">
+                {isSearchingRag ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <Loader2 className="h-7 w-7 animate-spin mx-auto text-blue-500 mb-2" />
+                    <p className="text-xs">Computing cosine similarity across resume chunks in PostgreSQL...</p>
+                  </div>
+                ) : ragResults.length === 0 ? (
+                  <div className="py-10 text-center text-slate-500 text-xs">
+                    Enter a query above and click "Search Vector DB" to retrieve the most semantically relevant parts of your resume.
+                  </div>
+                ) : (
+                  ragResults.map((match, idx) => (
+                    <div
+                      key={match.id || idx}
+                      className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2"
+                    >
+                      <div className="flex items-center justify-between text-xxs">
+                        <span className="font-semibold text-blue-400">
+                          {match.sectionTitle || `Match #${idx + 1}`}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                          {(match.similarity * 100).toFixed(1)}% Cosine Similarity
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-mono bg-slate-900/40 p-2.5 rounded-lg border border-slate-900">
+                        {match.content}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
             </motion.div>
           </div>
         )}
@@ -858,7 +1159,7 @@ export default function DashboardPage() {
               <div className="flex justify-between items-center pb-3 border-b border-slate-800">
                 <div className="flex items-center space-x-2">
                   <FileText className="h-5 w-5 text-blue-400" />
-                  <h3 className="text-base font-bold text-white">Manage Resumes</h3>
+                  <h3 className="text-base font-bold text-white">Manage Resumes & Embeddings</h3>
                 </div>
                 <button
                   onClick={() => setIsResumeModalOpen(false)}
@@ -886,7 +1187,7 @@ export default function DashboardPage() {
                       <div className="truncate pr-2">
                         <p className="font-semibold text-white truncate">{r.fileName}</p>
                         <p className="text-xxs text-slate-500">
-                          {r.parsedSkills?.length || 0} skills detected
+                          {r.parsedSkills?.length || 0} skills detected • pgvector indexed
                         </p>
                       </div>
                       <button
