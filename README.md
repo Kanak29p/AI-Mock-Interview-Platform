@@ -19,33 +19,34 @@ An intelligent, full-stack AI Mock Interview platform designed to help candidate
 
 ---
 
-## 🚀 Current Progress: Phase 1 — Backend Foundation
+## 🚀 Progress & Roadmap
 
-### What's Built in Phase 1:
-1. **Express.js + TypeScript Server (`backend/`)**:
-   - Production-ready modular architecture with Helmet, CORS, Morgan logger, and centralized error handling.
-   - Database connection pool (`pg.Pool`) and Redis client (`ioredis`) with resilient fallbacks.
-   - Comprehensive automated migration runner executing DDL on startup.
-2. **PostgreSQL + `pgvector` Schema (`backend/src/db/schema.sql`)**:
-   - `users`: Credentials, user role (`candidate`, `recruiter`, `student`), and token tracking.
-   - `resumes`: Resume text, parsed skill tags, and 768-dimension `vector(768)` embedding for Gemini RAG.
-   - `interview_sessions`: Role title, difficulty, interview type, and session lifecycle.
-   - `interview_questions`: Structured questions, expected talking points, categories, and coding snippets.
-   - `responses`: User transcripts, recorded audio URLs, code submissions, and execution output.
-   - `feedback`: Rubric scores (technical, communication, overall), strengths, improvements, and AI summary.
-3. **JWT Authentication API (`/api/auth`)**:
-   - `POST /api/auth/register` — Validates inputs (Zod), hashes passwords with bcrypt, provisions user, issues access & refresh tokens.
-   - `POST /api/auth/login` — Authenticates credentials, stores active session in DB/Redis, returns tokens.
-   - `POST /api/auth/refresh` — Validates refresh token and issues a refreshed access token.
-   - `GET /api/auth/me` — Protected route returning the active user profile via Bearer token.
-   - `GET /api/health` — Healthcheck endpoint reporting status of PostgreSQL and Redis connections.
-4. **Frontend API Wiring**:
-   - Created typed client in `frontend/src/lib/api.ts` with local storage token helpers.
-   - Replaced simulated mock delays in both `/login` and `/signup` with real backend API calls.
-5. **Containerization (`docker-compose.yml`)**:
-   - `postgres`: Containerized with `pgvector/pgvector:pg16` image and persistent volume.
-   - `redis`: Containerized with `redis:7-alpine` and persistent volume.
-   - `backend`: Multi-stage Alpine container with healthchecks and auto-migration.
+### ✅ Phase 1: Backend Foundation
+- Express.js + TypeScript server with Helmet, CORS, Morgan logger, and centralized error handling.
+- PostgreSQL + `pgvector` schema (`users`, `resumes`, `interview_sessions`, `interview_questions`, `responses`, `feedback`).
+- JWT authentication endpoints (`register`, `login`, `refresh`, `me`).
+- Dockerized setup (`postgres` with pgvector, `redis`, and `backend`).
+- Real API wiring in `/login` and `/signup` without touching visual styling.
+
+### ✅ Phase 2: Candidate Dashboard & Interview Setup
+- **Protected Candidate Dashboard (`/dashboard`)**:
+  - Token-validated route with automatic redirect to `/login` if unauthenticated.
+  - Candidate profile header with logout functionality.
+  - Overview metrics (Total Sessions, Average Score, Synced Resumes, Active Track).
+  - Empty and populated states for past interview sessions.
+- **Resume Management & Parsing**:
+  - `POST /api/resumes/upload` using Multer & PDF-Parse.
+  - Automatic engineering skill keywords extraction (React, Node, TypeScript, Docker, etc.).
+  - Resume manager tab for uploading and deleting resumes.
+- **"Start New Interview" Flow**:
+  - Interactive multi-step modal to configure target role, seniority level (`junior`, `intermediate`, `senior`, `lead`), and interview type (`technical`, `behavioral`, `coding`).
+  - Selection of attached resume for RAG question tailoring.
+  - Creation of session via `POST /api/interviews`.
+
+### ⏳ Coming in Phase 3: AI Interview Room & Live Session Engine
+- Real-time conversational interview loop with Google Gemini API.
+- Question generation conditioned on candidate resume context via RAG.
+- Speech-to-Text (STT) and candidate voice response capture.
 
 ---
 
@@ -76,7 +77,7 @@ cp .env.example .env
 | `JWT_REFRESH_SECRET` | Secret key for signing refresh tokens | Minimum 32 characters random string |
 | `JWT_EXPIRES_IN` | Access token lifespan | `1h` |
 | `JWT_REFRESH_EXPIRES_IN`| Refresh token lifespan | `7d` |
-| `GEMINI_API_KEY` | *(Required for Phase 2)* Google Gemini API Key | Get from [Google AI Studio](https://aistudio.google.com) |
+| `GEMINI_API_KEY` | *(Required for Phase 3)* Google Gemini API Key | Get from [Google AI Studio](https://aistudio.google.com) |
 | `JUDGE0_API_KEY` | *(Required for Phase 4)* Judge0 API Key | RapidAPI or self-hosted Judge0 |
 
 ---
@@ -85,107 +86,50 @@ cp .env.example .env
 
 ### Option A: Using Docker Compose (Recommended)
 
-1. Ensure **Docker Desktop** is running on your machine.
-2. Run from the project root:
+1. Ensure **Docker Desktop** is running.
+2. From the project root:
    ```bash
    docker compose up --build -d
    ```
-3. Verify running containers:
-   ```bash
-   docker compose ps
-   ```
-4. Start the frontend:
+3. Run the frontend:
    ```bash
    cd frontend
-   npm install
    npm run dev
    ```
-5. Open [http://localhost:3000](http://localhost:3000) to view the app. Test Sign Up at `/signup` and Login at `/login`.
+4. Navigate to [http://localhost:3000](http://localhost:3000).
 
 ---
 
 ### Option B: Running Locally without Docker
 
-1. Ensure you have a local PostgreSQL instance (with pgvector installed) and Redis running.
-2. Set up the backend:
+1. Ensure PostgreSQL and Redis are running locally.
+2. In `backend/`:
    ```bash
-   cd backend
-   npm install
-   cp .env.example .env
-   npm run migrate    # Creates tables & vector extensions
-   npm run dev        # Starts backend server on port 5000
+   npm run migrate    # Apply database schema
+   npm run dev        # Starts backend on http://localhost:5000
    ```
-3. Set up the frontend:
+3. In `frontend/`:
    ```bash
-   cd ../frontend
-   npm install
-   npm run dev        # Starts Next.js on port 3000
+   npm run dev        # Starts Next.js on http://localhost:3000
    ```
 
 ---
 
-## 📡 API Reference (Phase 1)
+## 📡 API Reference
 
-### `GET /api/health`
-Checks database and Redis connectivity.
-```json
-{
-  "status": "healthy",
-  "timestamp": "2026-10-26T14:45:00.000Z",
-  "services": {
-    "database": "connected",
-    "redis": "connected"
-  }
-}
-```
+### Auth (`/api/auth`)
+* `POST /api/auth/register` — Create candidate account
+* `POST /api/auth/login` — Sign in and receive JWT tokens
+* `POST /api/auth/refresh` — Refresh access token
+* `GET /api/auth/me` — Authenticated profile (Bearer Token)
+* `GET /api/health` — PostgreSQL and Redis connectivity status
 
-### `POST /api/auth/register`
-**Body:**
-```json
-{
-  "fullName": "Jane Doe",
-  "email": "jane@example.com",
-  "password": "Password123!",
-  "role": "candidate"
-}
-```
-**Response (201 Created):**
-```json
-{
-  "success": true,
-  "message": "Account created successfully",
-  "data": {
-    "user": {
-      "id": "e4b105a5-...",
-      "fullName": "Jane Doe",
-      "email": "jane@example.com",
-      "role": "candidate"
-    },
-    "tokens": {
-      "accessToken": "eyJhbGciOi...",
-      "refreshToken": "eyJhbGciOi..."
-    }
-  }
-}
-```
+### Resumes (`/api/resumes`)
+* `GET /api/resumes` — List candidate's uploaded resumes and detected skills
+* `POST /api/resumes/upload` — Upload PDF/TXT resume (multipart/form-data)
+* `DELETE /api/resumes/:id` — Delete a resume
 
-### `POST /api/auth/login`
-**Body:**
-```json
-{
-  "email": "jane@example.com",
-  "password": "Password123!"
-}
-```
-
-### `POST /api/auth/refresh`
-**Body:**
-```json
-{
-  "refreshToken": "eyJhbGciOi..."
-}
-```
-
-### `GET /api/auth/me`
-**Header:** `Authorization: Bearer <accessToken>`
-Returns current authenticated user details.
+### Interviews (`/api/interviews`)
+* `GET /api/interviews` — List candidate's past and scheduled interview sessions
+* `POST /api/interviews` — Schedule a new interview session (`roleTitle`, `difficulty`, `interviewType`, `resumeId`)
+* `GET /api/interviews/:id` — Retrieve details for a specific interview session

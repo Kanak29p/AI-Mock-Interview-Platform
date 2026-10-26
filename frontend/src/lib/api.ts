@@ -144,3 +144,98 @@ export const authApi = {
     });
   },
 };
+
+export interface Resume {
+  id: string;
+  fileName: string;
+  parsedSkills: string[];
+  createdAt: string;
+}
+
+export interface InterviewSession {
+  id: string;
+  roleTitle: string;
+  difficulty: "junior" | "intermediate" | "senior" | "lead";
+  interviewType: "technical" | "behavioral" | "coding";
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  score?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  resumeId?: string | null;
+  resumeFileName?: string | null;
+}
+
+export interface CreateInterviewPayload {
+  roleTitle: string;
+  difficulty: "junior" | "intermediate" | "senior" | "lead";
+  interviewType: "technical" | "behavioral" | "coding";
+  resumeId?: string | null;
+}
+
+export const resumeApi = {
+  getResumes: async (): Promise<{ success: boolean; data: { resumes: Resume[] } }> => {
+    return request<{ success: boolean; data: { resumes: Resume[] } }>("/api/resumes", {
+      method: "GET",
+    });
+  },
+
+  uploadResume: async (file: File): Promise<{ success: boolean; message: string; data: { resume: Resume } }> => {
+    const formData = new FormData();
+    formData.append("resume", file);
+
+    const token = tokenStorage.getAccessToken();
+    const headers = new Headers();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${API_URL}/api/resumes/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new ApiError(data?.message || "Failed to upload resume", response.status);
+    }
+
+    return data;
+  },
+
+  deleteResume: async (id: string): Promise<{ success: boolean; message: string }> => {
+    return request<{ success: boolean; message: string }>(`/api/resumes/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+export const interviewApi = {
+  getInterviews: async (): Promise<{ success: boolean; data: { interviews: InterviewSession[] } }> => {
+    return request<{ success: boolean; data: { interviews: InterviewSession[] } }>("/api/interviews", {
+      method: "GET",
+    });
+  },
+
+  createInterview: async (
+    payload: CreateInterviewPayload
+  ): Promise<{ success: boolean; message: string; data: { interview: InterviewSession } }> => {
+    return request<{ success: boolean; message: string; data: { interview: InterviewSession } }>(
+      "/api/interviews",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  getInterviewById: async (
+    id: string
+  ): Promise<{ success: boolean; data: { interview: InterviewSession } }> => {
+    return request<{ success: boolean; data: { interview: InterviewSession } }>(`/api/interviews/${id}`, {
+      method: "GET",
+    });
+  },
+};

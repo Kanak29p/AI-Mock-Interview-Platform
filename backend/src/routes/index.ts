@@ -1,5 +1,7 @@
 import { Router } from "express";
 import authRoutes from "./auth.routes";
+import resumeRoutes from "./resume.routes";
+import interviewRoutes from "./interview.routes";
 import { pool } from "../config/db";
 import { redis } from "../config/redis";
 
@@ -39,7 +41,9 @@ router.get("/health", async (req, res) => {
   });
 });
 
-// Auth endpoints
+// Mounted sub-routes
 router.use("/auth", authRoutes);
+router.use("/resumes", resumeRoutes);
+router.use("/interviews", interviewRoutes);
 
 export default router;
