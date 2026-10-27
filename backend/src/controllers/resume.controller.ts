@@ -50,16 +50,25 @@ export const uploadResume = async (
 
     if (mimetype === "application/pdf" || originalname.toLowerCase().endsWith(".pdf")) {
       try {
-        const parser = new PDFParse({ data: buffer });
+        const parser = new PDFParse(buffer);
         const parsed = await parser.getText();
-        rawText = parsed.text || "";
+        rawText = parsed?.text || "";
       } catch (pdfErr) {
-        console.warn("Could not parse PDF using pdf-parse, extracting raw buffer snippet", pdfErr);
-        rawText = buffer.toString("utf-8", 0, Math.min(buffer.length, 50000));
+        console.warn("Could not parse PDF using pdf-parse, extracting text stream:", pdfErr);
+        const latin = buffer.toString("latin1");
+        const matches = latin.match(/[a-zA-Z0-9\s.,!?:;@#\-_/()]{4,}/g);
+        rawText = matches ? matches.join(" ") : "";
       }
     } else {
       // Plain text or markdown
       rawText = buffer.toString("utf-8");
+    }
+
+    // Sanitize any null bytes that would cause PostgreSQL UTF-8 encoding errors
+    rawText = rawText.replace(/\0/g, "").replace(/\u0000/g, "").trim();
+
+    if (!rawText || rawText.length === 0) {
+      rawText = `Resume: ${originalname.replace(/\.[^/.]+$/, "")}\nUploaded candidate background profile.`;
     }
 
     // Extract detected skills
