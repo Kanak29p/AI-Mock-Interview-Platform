@@ -88,10 +88,29 @@ An intelligent, full-stack AI Mock Interview platform designed to help candidate
   - Run Code action allows candidates to test and verify their solution before submitting to the interviewer.
   - Response submissions record code, language, and execution results directly into the `responses` table.
 
-### ⏳ Coming in Phase 6: Feedback, Scoring Rubrics & Performance Report
-- Post-interview comprehensive 3-pillar rubric evaluation (Technical accuracy, STAR communication structure, Overall score 0–100).
-- Detailed strengths, improvement areas, and concrete actionable suggestions.
-- Interactive Feedback Report page (`/interview/[id]/feedback`).
+### ✅ Phase 6: Evaluation, Scoring Rubrics & Performance Report
+- **Gemini-Powered Bar Raiser Evaluator (`evaluation.service.ts`)**:
+  - Full transcript analysis across questions, candidate answers, code submissions, and execution diagnostics.
+  - **3-Pillar Rubric**:
+    - *Technical Accuracy & Depth* (0–100)
+    - *Communication & STAR Structure* (0–100)
+    - *Overall Weighted Readiness Score* (0–100)
+  - Qualitative assessments:
+    - *Readiness Level*: "Strong Hire", "Hire", "Leaning Hire", "Needs Preparation".
+    - *Demonstrated Strengths*: 3–5 evidence-backed bullet points.
+    - *Areas for Growth*: 3–5 constructive technical and communication improvements.
+    - *Targeted Recommendations*: Concrete study topics and design patterns.
+    - *Per-Answer Breakdown*: Turn-by-turn question analysis with score, what went well, missed points, and ideal response elements.
+  - Zero-crash fallback heuristic evaluation when offline.
+- **Dedicated Performance Report Page (`/interview/[id]/feedback`)**:
+  - Scorecard cards with readiness badges and gradient progress bars.
+  - Executive summary from Gemini.
+  - Strengths and growth areas 2-column grid.
+  - Turn-by-turn collapsible accordion showing question, user answer, code submission, and ideal answer snippets.
+  - Printable / Save PDF option.
+- **Dashboard & Room Integration**:
+  - Session history cards on candidate dashboard feature a "Feedback" button for completed sessions.
+  - Interview room completion celebration screen features a direct link to the full evaluation report.
 
 ---
 

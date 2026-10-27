@@ -29,6 +29,7 @@ import {
   Search,
   RefreshCw,
   HelpCircle,
+  History,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -325,6 +326,14 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Hidden persistent file input for resume uploads across tabs and modals */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
         {/* Welcome & Primary Actions Banner */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950/50 via-slate-900 to-indigo-950/40 border border-slate-800/80 p-6 sm:p-8 shadow-xl">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -344,9 +353,9 @@ export default function DashboardPage() {
 
             <div className="flex flex-wrap items-center gap-3">
               <Button
-                onClick={() => setIsResumeModalOpen(true)}
+                onClick={() => setActiveTab("resumes")}
                 variant="outline"
-                className="border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white rounded-xl shadow-sm"
+                className="border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white rounded-xl shadow-sm cursor-pointer"
               >
                 <FileText className="h-4 w-4 mr-2 text-blue-400" />
                 Resumes ({resumes.length})
@@ -536,25 +545,47 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
-                          onClick={() => handleViewQuestions(session)}
-                        >
-                          <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-400" />
-                          <span>Questions</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl cursor-pointer"
-                          onClick={() => router.push(`/interview/${session.id}`)}
-                        >
-                          <span>Launch</span>
-                          <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                        </Button>
-                      </div>
+                      {session.status === "completed" ? (
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
+                            onClick={() => router.push(`/interview/${session.id}`)}
+                          >
+                            <History className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                            <span>Room</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="w-full text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl cursor-pointer shadow-md shadow-emerald-600/20"
+                            onClick={() => router.push(`/interview/${session.id}/feedback`)}
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                            <span>Feedback</span>
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
+                            onClick={() => handleViewQuestions(session)}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                            <span>Questions</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl cursor-pointer"
+                            onClick={() => router.push(`/interview/${session.id}`)}
+                          >
+                            <span>Launch</span>
+                            <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -586,13 +617,6 @@ export default function DashboardPage() {
                 )}
                 Upload Resume (PDF/TXT)
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.txt"
-                className="hidden"
-                onChange={handleFileUpload}
-              />
             </div>
 
             {resumeUploadError && (
@@ -851,21 +875,49 @@ export default function DashboardPage() {
                     </Label>
                     <button
                       type="button"
+                      disabled={isUploadingResume}
                       onClick={() => fileInputRef.current?.click()}
-                      className="text-xxs text-blue-400 hover:underline flex items-center font-medium"
+                      className="text-xxs text-blue-400 hover:underline flex items-center font-medium disabled:opacity-50 cursor-pointer"
                     >
-                      <Upload className="h-3 w-3 mr-1" />
-                      Upload New
+                      {isUploadingResume ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Uploading & Indexing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-3 w-3 mr-1" />
+                          Upload New
+                        </>
+                      )}
                     </button>
                   </div>
 
+                  {isUploadingResume && (
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs text-blue-300 flex items-center space-x-2 animate-pulse">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-400 shrink-0" />
+                      <span>Parsing resume, extracting technical skills, and indexing pgvector embeddings...</span>
+                    </div>
+                  )}
+
+                  {resumeUploadError && (
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400 flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
+                      <span>{resumeUploadError}</span>
+                    </div>
+                  )}
+
                   {resumes.length === 0 ? (
                     <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border border-dashed border-slate-800 bg-slate-950 p-4 rounded-xl text-center cursor-pointer hover:border-slate-700"
+                      onClick={() => !isUploadingResume && fileInputRef.current?.click()}
+                      className={`border border-dashed border-slate-800 bg-slate-950 p-4 rounded-xl text-center ${
+                        isUploadingResume ? "opacity-50 cursor-wait" : "cursor-pointer hover:border-slate-700"
+                      }`}
                     >
                       <Upload className="h-5 w-5 mx-auto text-slate-500 mb-1" />
-                      <p className="text-xs font-medium text-slate-300">Click to upload your resume (PDF/TXT)</p>
+                      <p className="text-xs font-medium text-slate-300">
+                        {isUploadingResume ? "Processing resume..." : "Click to upload your resume (PDF/TXT)"}
+                      </p>
                       <p className="text-xxs text-slate-500 mt-0.5">Gemini will personalize questions based on your background</p>
                     </div>
                   ) : (

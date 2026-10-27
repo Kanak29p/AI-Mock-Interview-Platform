@@ -112,8 +112,16 @@ CREATE TABLE IF NOT EXISTS feedback (
     strengths TEXT[],
     areas_for_improvement TEXT[],
     detailed_feedback TEXT,
+    per_answer_feedback JSONB DEFAULT '[]'::jsonb,
+    recommendations TEXT[],
+    readiness_level VARCHAR(50),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS per_answer_feedback JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS recommendations TEXT[] DEFAULT '{}';
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS readiness_level VARCHAR(50);
+
 CREATE INDEX IF NOT EXISTS idx_feedback_session ON feedback(session_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_response ON feedback(response_id);
+

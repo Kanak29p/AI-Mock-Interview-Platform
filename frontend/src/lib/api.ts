@@ -404,7 +404,51 @@ export const interviewApi = {
       method: "POST",
     });
   },
+
+  getFeedback: async (
+    id: string
+  ): Promise<{ success: boolean; data: { session: InterviewSession; feedback: FeedbackData } }> => {
+    return request(`/api/interviews/${id}/feedback`, {
+      method: "GET",
+    });
+  },
+
+  evaluateSession: async (
+    id: string
+  ): Promise<{ success: boolean; data: { feedback: FeedbackData } }> => {
+    return request(`/api/interviews/${id}/evaluate`, {
+      method: "POST",
+    });
+  },
 };
+
+export interface PerAnswerFeedback {
+  questionId: string;
+  questionOrder: number;
+  questionText: string;
+  category: string;
+  candidateAnswer: string;
+  codeSubmission?: string;
+  score: number;
+  strengths: string;
+  missedPoints: string;
+  idealAnswerSnippet: string;
+}
+
+export interface FeedbackData {
+  id: string;
+  sessionId: string;
+  technicalScore: number;
+  communicationScore: number;
+  overallScore: number;
+  readinessLevel: "Strong Hire" | "Hire" | "Leaning Hire" | "Needs Preparation" | string;
+  strengths: string[];
+  areasForImprovement: string[];
+  recommendations: string[];
+  detailedFeedback: string;
+  perAnswerFeedback: PerAnswerFeedback[];
+  createdAt: string;
+}
 
 export const codeApi = {
   runCode: async (payload: {
