@@ -108,7 +108,7 @@ export default function LoginPage() {
       setIsSuccess(true);
       // Redirect after success animation
       setTimeout(() => {
-        router.push("/");
+        router.push("/dashboard");
       }, 1200);
     } catch (err: any) {
       setIsLoading(false);

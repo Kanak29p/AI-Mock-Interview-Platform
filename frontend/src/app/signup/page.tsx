@@ -92,7 +92,7 @@ export default function SignupPage() {
       setIsLoading(false);
       setIsSuccess(true);
       setTimeout(() => {
-        router.push("/login");
+        router.push("/dashboard");
       }, 1500);
     } catch (err: any) {
       setIsLoading(false);
