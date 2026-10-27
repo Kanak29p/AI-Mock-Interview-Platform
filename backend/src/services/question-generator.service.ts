@@ -10,6 +10,7 @@ export interface GeneratedQuestion {
   category: string;
   difficulty: string;
   codeStarterSnippet?: string;
+  testCases?: Array<{ input: string; expectedOutput: string }>;
 }
 
 /**
@@ -73,7 +74,33 @@ const getCuratedFallbackQuestions = (
         expectedPoints: ["Sliding window technique", "O(N) time complexity", "O(1) extra space"],
         category: "Algorithms & Sliding Window",
         difficulty,
-        codeStarterSnippet: "function maxAverageLatency(latencies, k) {\n  // Your code here\n}",
+        codeStarterSnippet: `function maxAverageLatency(latencies, k) {
+  // Implement sliding window algorithm
+  let currentSum = 0;
+  for (let i = 0; i < k; i++) {
+    currentSum += latencies[i];
+  }
+  let maxAvg = currentSum / k;
+  for (let i = k; i < latencies.length; i++) {
+    currentSum += latencies[i] - latencies[i - k];
+    maxAvg = Math.max(maxAvg, currentSum / k);
+  }
+  return maxAvg;
+}
+
+// Example invocation for sandbox test:
+console.log(maxAverageLatency([1, 12, -5, -6, 50, 3], 4));
+`,
+        testCases: [
+          {
+            input: "[1, 12, -5, -6, 50, 3], 4",
+            expectedOutput: "12.75",
+          },
+          {
+            input: "[5], 1",
+            expectedOutput: "5",
+          },
+        ],
       },
       {
         questionOrder: 2,
@@ -81,7 +108,42 @@ const getCuratedFallbackQuestions = (
         expectedPoints: ["Hash map + Doubly linked list", "Node eviction logic", "Edge cases (empty, capacity 1)"],
         category: "Data Structures",
         difficulty,
-        codeStarterSnippet: "class LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n  }\n\n  get(key) {\n    // O(1) retrieval\n  }\n\n  put(key, value) {\n    // O(1) insert/update\n  }\n}",
+        codeStarterSnippet: `class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.map = new Map();
+  }
+
+  get(key) {
+    if (!this.map.has(key)) return -1;
+    const val = this.map.get(key);
+    this.map.delete(key);
+    this.map.set(key, val);
+    return val;
+  }
+
+  put(key, value) {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.capacity) {
+      const oldestKey = this.map.keys().next().value;
+      this.map.delete(oldestKey);
+    }
+    this.map.set(key, value);
+  }
+}
+
+const cache = new LRUCache(2);
+cache.put(1, 1);
+cache.put(2, 2);
+console.log(cache.get(1));
+`,
+        testCases: [
+          {
+            input: "put(1, 1), put(2, 2), get(1)",
+            expectedOutput: "1",
+          },
+        ],
       },
       {
         questionOrder: 3,
@@ -89,7 +151,38 @@ const getCuratedFallbackQuestions = (
         expectedPoints: ["Graph cycle detection (DFS / Topological Sort)", "Visited vs In-Stack states", "O(V + E) time"],
         category: "Graph Algorithms",
         difficulty,
-        codeStarterSnippet: "function hasCircularDependency(numServices, dependencies) {\n  // Return true if cycle exists\n}",
+        codeStarterSnippet: `function hasCircularDependency(numServices, dependencies) {
+  const adj = Array.from({ length: numServices }, () => []);
+  for (const [u, v] of dependencies) {
+    adj[u].push(v);
+  }
+  const visited = new Array(numServices).fill(0); // 0=unvisited, 1=visiting, 2=visited
+
+  function dfs(node) {
+    if (visited[node] === 1) return true;
+    if (visited[node] === 2) return false;
+    visited[node] = 1;
+    for (const neighbor of adj[node]) {
+      if (dfs(neighbor)) return true;
+    }
+    visited[node] = 2;
+    return false;
+  }
+
+  for (let i = 0; i < numServices; i++) {
+    if (visited[i] === 0 && dfs(i)) return true;
+  }
+  return false;
+}
+
+console.log(hasCircularDependency(3, [[0, 1], [1, 2], [2, 0]]));
+`,
+        testCases: [
+          {
+            input: "3, [[0, 1], [1, 2], [2, 0]]",
+            expectedOutput: "true",
+          },
+        ],
       },
     ];
   }
@@ -171,7 +264,7 @@ ${contextSnippet}
 INSTRUCTIONS:
 1. Generate between 4 and 5 realistic, deep, and challenging interview questions for this session.
 2. CRITICAL: Personalize at least 2 questions directly referencing the candidate's specific technologies, projects, or achievements found in their resume background above.
-3. For "coding" rounds, provide a clear algorithmic problem with a code starter snippet.
+3. For "coding" rounds, provide a clear algorithmic problem with a code starter snippet AND 1-3 test cases with sample input and expectedOutput.
 4. Output MUST be valid JSON matching this exact structure:
 [
   {
@@ -180,7 +273,8 @@ INSTRUCTIONS:
     "expectedPoints": ["Key point 1", "Key point 2", "Key point 3"],
     "category": "Category title (e.g. Distributed Systems, Problem Solving)",
     "difficulty": "${difficulty}",
-    "codeStarterSnippet": "Optional code starter string"
+    "codeStarterSnippet": "Optional code starter string",
+    "testCases": [{"input": "sample input", "expectedOutput": "expected output"}]
   }
 ]`;
 
@@ -225,8 +319,8 @@ export const saveQuestionsToDatabase = async (
   for (const q of questions) {
     await pool.query(
       `INSERT INTO interview_questions 
-        (session_id, question_order, question_text, expected_points, category, difficulty, code_starter_snippet)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        (session_id, question_order, question_text, expected_points, category, difficulty, code_starter_snippet, test_cases)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         sessionId,
         q.questionOrder,
@@ -235,6 +329,7 @@ export const saveQuestionsToDatabase = async (
         q.category,
         q.difficulty,
         q.codeStarterSnippet || null,
+        JSON.stringify(q.testCases || []),
       ]
     );
   }

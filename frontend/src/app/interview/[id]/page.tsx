@@ -17,7 +17,6 @@ import {
   HelpCircle,
   Clock,
   Mic,
-  MicOff,
   Video,
   Volume2,
   Check,
@@ -25,6 +24,12 @@ import {
   ChevronRight,
   History,
   Terminal,
+  Play,
+  RotateCcw,
+  CheckSquare,
+  Cpu,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -32,11 +37,99 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   interviewApi,
+  codeApi,
   tokenStorage,
   InterviewSession,
   InterviewQuestion,
   ConversationTurn,
+  BatchExecutionReport,
+  TestCaseResult,
 } from "@/lib/api";
+import { MonacoCodeEditor } from "@/components/MonacoCodeEditor";
+
+const LANGUAGE_STARTERS: Record<string, string> = {
+  javascript: `/**
+ * JavaScript Solution
+ * @param {string} input
+ * @return {void}
+ */
+function solve(input) {
+  // Write your algorithm logic here
+  console.log(input.trim());
+}
+
+// Test harness
+solve("sample_input");
+`,
+  typescript: `/**
+ * TypeScript Solution
+ */
+function solve(input: string): void {
+  // Write your algorithm logic here
+  console.log(input.trim());
+}
+
+solve("sample_input");
+`,
+  python: `import sys
+
+def solve():
+    # Write your solution logic here
+    input_data = sys.stdin.read().strip()
+    if input_data:
+        print(input_data)
+    else:
+        print("Hello from Python")
+
+if __name__ == "__main__":
+    solve()
+`,
+  java: `import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        if (scanner.hasNextLine()) {
+            System.out.println(scanner.nextLine());
+        } else {
+            System.out.println("Java Solution Ready");
+        }
+    }
+}
+`,
+  cpp: `#include <iostream>
+#include <string>
+
+using namespace std;
+
+int main() {
+    string line;
+    if (getline(cin, line)) {
+        cout << line << "\\n";
+    } else {
+        cout << "C++ Solution Ready\\n";
+    }
+    return 0;
+}
+`,
+  go: `package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+)
+
+func main() {
+    scanner := bufio.NewScanner(os.Stdin)
+    if scanner.Scan() {
+        fmt.Println(scanner.Text())
+    } else {
+        fmt.Println("Go Solution Ready")
+    }
+}
+`,
+};
 
 export default function InterviewRoomPage() {
   const params = useParams();
@@ -55,6 +148,13 @@ export default function InterviewRoomPage() {
   const [codeSubmission, setCodeSubmission] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("javascript");
   const [activeInputTab, setActiveInputTab] = useState<"text" | "code">("text");
+
+  // Code Execution states (Judge0 / Sandbox)
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [executionReport, setExecutionReport] = useState<BatchExecutionReport | null>(null);
+  const [customStdin, setCustomStdin] = useState("");
+  const [activeTestTab, setActiveTestTab] = useState<"cases" | "custom" | "output">("cases");
+  const [selectedCaseIdx, setSelectedCaseIdx] = useState(0);
 
   // Interaction & Loading states
   const [isLoadingSession, setIsLoadingSession] = useState(true);
@@ -99,11 +199,14 @@ export default function InterviewRoomPage() {
         setTurns(turnsRes.data.turns);
 
         // Prepopulate starter code snippet if coding round
+        if (startRes.data.session.interviewType === "coding") {
+          setActiveInputTab("code");
+        }
+
         if (startRes.data.currentQuestion?.codeStarterSnippet) {
           setCodeSubmission(startRes.data.currentQuestion.codeStarterSnippet);
-          if (startRes.data.session.interviewType === "coding") {
-            setActiveInputTab("code");
-          }
+        } else if (startRes.data.session.interviewType === "coding") {
+          setCodeSubmission(LANGUAGE_STARTERS.javascript);
         }
       } catch (err: any) {
         setErrorMessage(err.message || "Failed to initialize interview room.");
@@ -117,10 +220,61 @@ export default function InterviewRoomPage() {
 
   // Focus textarea when question changes
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && activeInputTab === "text") {
       textareaRef.current.focus();
     }
-  }, [currentQuestion]);
+  }, [currentQuestion, activeInputTab]);
+
+  // Language switch handler
+  const handleLanguageChange = (newLang: string) => {
+    setSelectedLanguage(newLang);
+    // If current code is empty or matches starter snippet of previous language, switch starter
+    if (!codeSubmission.trim() || Object.values(LANGUAGE_STARTERS).includes(codeSubmission.trim())) {
+      setCodeSubmission(LANGUAGE_STARTERS[newLang] || "");
+    }
+  };
+
+  const handleResetStarter = () => {
+    if (currentQuestion?.codeStarterSnippet && selectedLanguage === "javascript") {
+      setCodeSubmission(currentQuestion.codeStarterSnippet);
+    } else {
+      setCodeSubmission(LANGUAGE_STARTERS[selectedLanguage] || "");
+    }
+  };
+
+  // Run code against test cases with Judge0 / Sandbox
+  const handleRunCode = async () => {
+    if (!codeSubmission.trim()) {
+      setErrorMessage("Please enter your solution code before running.");
+      return;
+    }
+
+    setIsRunningCode(true);
+    setErrorMessage("");
+
+    try {
+      const qCases = currentQuestion?.testCases || [];
+      const testCasesToRun = qCases.length > 0 ? qCases : undefined;
+
+      const res = await codeApi.runCode({
+        sourceCode: codeSubmission,
+        language: selectedLanguage,
+        stdin: customStdin,
+        testCases: testCasesToRun,
+      });
+
+      setExecutionReport(res.data);
+      if (qCases.length > 0) {
+        setActiveTestTab("cases");
+      } else {
+        setActiveTestTab("output");
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to execute code via Judge0 API / Sandbox.");
+    } finally {
+      setIsRunningCode(false);
+    }
+  };
 
   // 2. Submit candidate answer & dynamically generate next question
   const handleSubmitAnswer = async (e: React.FormEvent) => {
@@ -136,11 +290,17 @@ export default function InterviewRoomPage() {
     setErrorMessage("");
 
     try {
+      // Build execution summary string if tests were run
+      const execSummary = executionReport
+        ? `Execution: ${executionReport.passedTests}/${executionReport.totalTests} passed (${executionReport.executionMode}). Output: ${executionReport.results[0]?.actualOutput || ""}`
+        : undefined;
+
       const res = await interviewApi.submitResponse(sessionId, {
         questionId: currentQuestion.id,
         userResponseText: userResponseText.trim(),
         codeSubmission: codeSubmission.trim() || undefined,
         codeLanguage: selectedLanguage,
+        executionOutput: execSummary,
       });
 
       // Update turn history with the answered turn
@@ -150,28 +310,41 @@ export default function InterviewRoomPage() {
           questionId: currentQuestion.id,
           questionOrder: currentQuestion.questionOrder,
           questionText: currentQuestion.questionText,
+          expectedPoints: currentQuestion.expectedPoints,
           category: currentQuestion.category,
+          difficulty: currentQuestion.difficulty,
+          codeStarterSnippet: currentQuestion.codeStarterSnippet,
+          testCases: currentQuestion.testCases,
+          responseId: res.data.responseId,
           userResponseText: userResponseText.trim(),
           codeSubmission: codeSubmission.trim() || undefined,
           codeLanguage: selectedLanguage,
+          executionOutput: execSummary,
           answeredAt: new Date().toISOString(),
         },
       ]);
 
+      // Feedback snippet from interviewer
+      if (res.data.interviewerFeedbackSnippet) {
+        setFeedbackSnippet(res.data.interviewerFeedbackSnippet);
+      }
+
+      // Check if session reached the end
       if (res.data.isCompleted || !res.data.nextQuestion) {
         setIsCompleted(true);
-        setFeedbackSnippet(res.data.interviewerFeedbackSnippet || "Interview completed!");
+        await interviewApi.completeSession(sessionId);
       } else {
-        // Transition to next dynamic question generated by Gemini
-        setFeedbackSnippet(res.data.interviewerFeedbackSnippet || null);
+        // Transition to next dynamic turn
         setCurrentQuestion(res.data.nextQuestion);
         setQuestionOrder(res.data.nextQuestion.questionOrder);
         setUserResponseText("");
+        setExecutionReport(null);
 
+        // Prepopulate starter code for next turn if available
         if (res.data.nextQuestion.codeStarterSnippet) {
           setCodeSubmission(res.data.nextQuestion.codeStarterSnippet);
-        } else {
-          setCodeSubmission("");
+        } else if (session?.interviewType === "coding") {
+          setCodeSubmission(LANGUAGE_STARTERS[selectedLanguage] || "");
         }
       }
     } catch (err: any) {
@@ -181,174 +354,174 @@ export default function InterviewRoomPage() {
     }
   };
 
-  // 3. Early complete session
-  const handleEndInterviewEarly = async () => {
-    if (window.confirm("Are you sure you want to conclude this interview session early?")) {
-      try {
-        await interviewApi.completeSession(sessionId);
-        setIsCompleted(true);
-      } catch (err) {
-        console.error("Failed to complete session:", err);
-      }
+  // TTS Voice Hook Simulation
+  const handleReadQuestionAloud = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      alert("Text-to-Speech is not supported in this browser.");
+      return;
     }
+
+    if (isAudioSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsAudioSpeaking(false);
+      return;
+    }
+
+    if (!currentQuestion?.questionText) return;
+
+    const utterance = new SpeechSynthesisUtterance(currentQuestion.questionText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setIsAudioSpeaking(false);
+    utterance.onerror = () => setIsAudioSpeaking(false);
+
+    setIsAudioSpeaking(true);
+    window.speechSynthesis.speak(utterance);
   };
 
-  /**
-   * AUDIO/SPEECH INTEGRATION PLUG-IN HOOK (Web Speech API / Whisper STT)
-   * Future Phase: When microphone is toggled, capture audio stream and inject transcript into userResponseText
-   */
+  // Mic STT Placeholder toggle
   const handleToggleMic = () => {
     setIsMicEnabled(!isMicEnabled);
-    if (!isMicEnabled) {
-      alert("🎙️ Audio STT Hook: Text-based mode is active. Browser Speech-to-Text / Whisper plugs in here in Phase 5!");
-    }
-  };
-
-  /**
-   * AUDIO/VOICE READOUT PLUG-IN HOOK (Web Speech TTS / ElevenLabs)
-   * Future Phase: Read aloud current question
-   */
-  const handleReadQuestionAloud = () => {
-    if (!currentQuestion) return;
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(currentQuestion.questionText);
-      utterance.rate = 1.0;
-      utterance.onstart = () => setIsAudioSpeaking(true);
-      utterance.onend = () => setIsAudioSpeaking(false);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      alert("Text-to-speech is not supported in this browser.");
-    }
   };
 
   if (isLoadingSession) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-3" />
-        <p className="text-base font-medium text-slate-300">Entering AI Mock Interview Room...</p>
-        <p className="text-xs text-slate-500 mt-1">Retrieving resume context and initializing interviewer persona</p>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100">
+        <div className="relative flex items-center justify-center mb-4">
+          <div className="h-16 w-16 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center animate-pulse">
+            <Bot className="h-8 w-8 text-blue-400" />
+          </div>
+          <Loader2 className="h-20 w-20 text-blue-500/40 animate-spin absolute" />
+        </div>
+        <h2 className="text-lg font-bold">Entering Mock Interview Chamber...</h2>
+        <p className="text-xs text-slate-500 mt-1">Configuring AI agent, pgvector RAG context, and Judge0 sandbox</p>
       </div>
     );
   }
 
-  // Completed State View
+  // Interview Completed Celebration Screen
   if (isCompleted) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl"
+          className="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl relative overflow-hidden"
         >
-          <div className="h-20 w-20 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400 shadow-lg shadow-emerald-500/20">
-            <CheckCircle2 className="h-10 w-10" />
+          <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="mx-auto h-20 w-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+            <Award className="h-10 w-10" />
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Mock Interview Completed!
-            </h1>
+            <h1 className="text-2xl font-bold text-white">Interview Complete!</h1>
             <p className="text-sm text-slate-400">
-              You've answered all questions for the <span className="text-white font-semibold">{session?.roleTitle}</span> round.
+              Outstanding work. You completed all {turns.length} conversational turns for the{" "}
+              <span className="text-blue-400 font-semibold">{session?.roleTitle}</span> mock interview.
             </p>
           </div>
 
-          {feedbackSnippet && (
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-300 italic text-left">
-              <span className="font-semibold text-blue-400 not-italic block mb-1">Interviewer Closing Note:</span>
-              "{feedbackSnippet}"
+          <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 text-left space-y-2 text-xs">
+            <div className="flex justify-between text-slate-400">
+              <span>Interview Round:</span>
+              <span className="font-semibold text-slate-200 capitalize">{session?.interviewType} Round</span>
             </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3 p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-xs text-left">
-            <div>
-              <span className="text-slate-500 block">Total Turns Answered</span>
-              <span className="text-base font-bold text-white">{turns.length} Questions</span>
+            <div className="flex justify-between text-slate-400">
+              <span>Difficulty:</span>
+              <span className="font-semibold text-slate-200 capitalize">{session?.difficulty}</span>
             </div>
-            <div>
-              <span className="text-slate-500 block">Round Type</span>
-              <span className="text-base font-bold text-blue-400 capitalize">{session?.interviewType}</span>
+            <div className="flex justify-between text-slate-400">
+              <span>Total Turns Completed:</span>
+              <span className="font-semibold text-emerald-400">{turns.length} / {maxQuestions}</span>
             </div>
+            {session?.resumeFileName && (
+              <div className="flex justify-between text-slate-400">
+                <span>Resume Grounding:</span>
+                <span className="font-semibold text-blue-300 truncate max-w-[200px]">
+                  {session.resumeFileName}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="pt-2 flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
               onClick={() => setIsHistoryDrawerOpen(true)}
               variant="outline"
-              className="flex-1 border-slate-800 hover:bg-slate-800 text-slate-300"
+              className="flex-1 border-slate-800 hover:bg-slate-800 text-slate-200 text-xs py-2.5 rounded-xl cursor-pointer"
             >
-              <History className="h-4 w-4 mr-2" />
+              <History className="h-4 w-4 mr-2 text-blue-400" />
               Review Transcript
             </Button>
-            <Button
-              onClick={() => router.push("/dashboard")}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold"
-            >
-              Back to Dashboard
-              <ChevronRight className="h-4 w-4 ml-1.5" />
-            </Button>
+            <Link href="/dashboard" className="flex-1">
+              <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2.5 rounded-xl shadow-lg shadow-blue-600/30 cursor-pointer">
+                Return to Dashboard
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
           </div>
         </motion.div>
       </div>
     );
   }
 
+  const questionTestCases = currentQuestion?.testCases || [];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      {/* Top Navbar */}
+      <header className="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Link
               href="/dashboard"
-              className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-900 transition-colors"
-              title="Return to Dashboard"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+              title="Back to Dashboard"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
             </Link>
+            <div className="h-5 w-px bg-slate-800" />
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-                <Bot className="h-4.5 w-4.5" />
+              <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
+                <Bot className="h-4 w-4 text-white" />
               </div>
-              <span className="font-bold text-sm sm:text-base text-white tracking-tight">
-                Live AI Interview Room
-              </span>
+              <div>
+                <h1 className="text-xs sm:text-sm font-bold text-white flex items-center space-x-2">
+                  <span>Interview Room</span>
+                  <span className="text-xxs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                    LIVE
+                  </span>
+                </h1>
+                <p className="text-xxs text-slate-400 truncate max-w-[200px] sm:max-w-xs">
+                  {session?.roleTitle} • {session?.difficulty}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Session Progress & Controls */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-semibold text-white">Turn {questionOrder}</span>
-              <span className="text-slate-500">of {maxQuestions}</span>
+          {/* Turn Progress & History Drawer Button */}
+          <div className="flex items-center space-x-3">
+            <div className="hidden sm:flex items-center space-x-1.5 text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+              <span className="text-blue-400 font-bold">Turn {questionOrder}</span>
+              <span className="text-slate-600">/</span>
+              <span>{maxQuestions}</span>
             </div>
 
             <Button
+              onClick={() => setIsHistoryDrawerOpen(true)}
               variant="outline"
               size="sm"
-              onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
-              className="border-slate-800 text-slate-300 hover:text-white text-xs"
+              className="border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs rounded-xl cursor-pointer"
             >
-              <History className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Transcript</span> ({turns.length})
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEndInterviewEarly}
-              className="border-rose-900/60 text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 text-xs"
-            >
-              End Session
+              <History className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+              Transcript ({turns.length})
             </Button>
           </div>
         </div>
       </header>
 
       {/* Main Interview Chamber */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col space-y-6">
         {/* Session Meta Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/60 border border-slate-800/80 rounded-2xl text-xs">
           <div className="flex items-center space-x-2">
@@ -419,13 +592,11 @@ export default function InterviewRoomPage() {
               {currentQuestion?.questionText}
             </p>
 
-            {/* Code Starter Snippet if provided */}
-            {currentQuestion?.codeStarterSnippet && (
-              <div className="rounded-xl bg-slate-950 border border-slate-800 p-3.5 font-mono text-xs text-emerald-400 overflow-x-auto">
-                <div className="text-xxs uppercase tracking-wider text-slate-500 font-sans mb-1 font-semibold">
-                  Starter Template:
-                </div>
-                <pre>{currentQuestion.codeStarterSnippet}</pre>
+            {/* Test cases summary pill if coding question */}
+            {questionTestCases.length > 0 && (
+              <div className="flex items-center space-x-2 text-xxs text-slate-400 bg-slate-950/70 border border-slate-800 px-3 py-1.5 rounded-xl w-fit">
+                <CheckSquare className="h-3.5 w-3.5 text-blue-400" />
+                <span>{questionTestCases.length} Test Cases Provided • Judge0 Sandbox Verification Enabled</span>
               </div>
             )}
           </CardContent>
@@ -445,7 +616,7 @@ export default function InterviewRoomPage() {
                     : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
                 }`}
               >
-                Text Response
+                Text Explanation
               </button>
 
               <button
@@ -458,7 +629,7 @@ export default function InterviewRoomPage() {
                 }`}
               >
                 <Code2 className="h-3.5 w-3.5" />
-                <span>Code Solution</span>
+                <span>Monaco Code Editor</span>
               </button>
             </div>
 
@@ -467,7 +638,7 @@ export default function InterviewRoomPage() {
               <button
                 type="button"
                 onClick={handleToggleMic}
-                className="hover:text-blue-400 flex items-center space-x-1"
+                className="hover:text-blue-400 flex items-center space-x-1 cursor-pointer"
                 title="Microphone (STT plug-in hook in Phase 5)"
               >
                 <Mic className={`h-3.5 w-3.5 ${isMicEnabled ? "text-emerald-400" : "text-slate-500"}`} />
@@ -499,7 +670,7 @@ export default function InterviewRoomPage() {
                   placeholder="Type your structured answer here. State your approach, mention trade-offs, explain edge cases, and draw on your experience..."
                   rows={8}
                   disabled={isSubmitting}
-                  className="w-full flex-1 min-h-[200px] p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 text-sm leading-relaxed resize-y font-sans"
+                  className="w-full flex-1 min-h-[220px] p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 text-sm leading-relaxed resize-y font-sans"
                 />
                 <div className="flex justify-between items-center text-xxs text-slate-500 mt-1 px-1">
                   <span>{userResponseText.split(/\s+/).filter(Boolean).length} words</span>
@@ -507,32 +678,272 @@ export default function InterviewRoomPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400 font-mono text-xxs flex items-center">
-                    <Terminal className="h-3.5 w-3.5 mr-1 text-blue-400" />
-                    Editor Sandbox
-                  </span>
-                  <select
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="bg-slate-900 border border-slate-800 text-slate-300 text-xxs rounded-lg px-2 py-1"
+              <div className="space-y-3 flex-1 flex flex-col">
+                {/* Monaco Controls Header */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-slate-400 font-mono text-xxs flex items-center">
+                      <Terminal className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                      Language:
+                    </span>
+                    <select
+                      value={selectedLanguage}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="javascript">JavaScript (Node.js)</option>
+                      <option value="typescript">TypeScript</option>
+                      <option value="python">Python 3</option>
+                      <option value="java">Java (OpenJDK)</option>
+                      <option value="cpp">C++ (GCC)</option>
+                      <option value="go">Go</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleResetStarter}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center space-x-1 text-xxs"
+                      title="Reset code to starter template"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+
+                  {/* Run Code Button */}
+                  <Button
+                    type="button"
+                    onClick={handleRunCode}
+                    disabled={isRunningCode || isSubmitting}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg shadow-md shadow-emerald-600/20 cursor-pointer h-8"
                   >
-                    <option value="javascript">JavaScript / TypeScript</option>
-                    <option value="python">Python</option>
-                    <option value="java">Java</option>
-                    <option value="cpp">C++</option>
-                    <option value="go">Go</option>
-                  </select>
+                    {isRunningCode ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Running Judge0...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                        Run Code
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <textarea
+
+                {/* Monaco Editor Component */}
+                <MonacoCodeEditor
                   value={codeSubmission}
-                  onChange={(e) => setCodeSubmission(e.target.value)}
-                  placeholder="// Write your algorithm or code snippet here..."
-                  rows={10}
-                  disabled={isSubmitting}
-                  className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 text-emerald-300 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs font-mono leading-relaxed resize-y"
+                  onChange={(val) => setCodeSubmission(val || "")}
+                  language={selectedLanguage}
+                  height="340px"
                 />
+
+                {/* Test Cases / Judge0 Results Panel */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTestTab("cases")}
+                        className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          activeTestTab === "cases"
+                            ? "bg-slate-800 text-white font-semibold"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Test Cases ({questionTestCases.length})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTestTab("custom")}
+                        className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          activeTestTab === "custom"
+                            ? "bg-slate-800 text-white font-semibold"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Custom Stdin
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTestTab("output")}
+                        className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          activeTestTab === "output"
+                            ? "bg-slate-800 text-white font-semibold"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Execution Output
+                      </button>
+                    </div>
+
+                    {/* Overall Score / Pass Rate Badge */}
+                    {executionReport && (
+                      <div className="flex items-center space-x-2 text-xxs">
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-bold flex items-center space-x-1 ${
+                            executionReport.allPassed
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                              : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+                          }`}
+                        >
+                          {executionReport.allPassed ? (
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                          ) : (
+                            <XCircle className="h-3 w-3 mr-1" />
+                          )}
+                          <span>
+                            {executionReport.passedTests} / {executionReport.totalTests} Passed
+                          </span>
+                        </span>
+                        <span className="text-slate-500 font-mono text-xxs">
+                          [{executionReport.executionMode}]
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tab 1: Test Cases List */}
+                  {activeTestTab === "cases" && (
+                    <div className="space-y-3">
+                      {questionTestCases.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic py-2">
+                          No predefined test cases for this question. Switch to Custom Stdin to provide your own input!
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Case Selectors */}
+                          <div className="flex items-center space-x-2">
+                            {questionTestCases.map((_, idx) => {
+                              const testRes = executionReport?.results[idx];
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setSelectedCaseIdx(idx)}
+                                  className={`text-xxs px-2.5 py-1 rounded-md font-mono flex items-center space-x-1.5 transition-colors cursor-pointer ${
+                                    selectedCaseIdx === idx
+                                      ? "bg-blue-600/20 text-blue-300 border border-blue-500/40"
+                                      : "bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                                  }`}
+                                >
+                                  <span>Case {idx + 1}</span>
+                                  {testRes && (
+                                    <span
+                                      className={`h-1.5 w-1.5 rounded-full ${
+                                        testRes.passed ? "bg-emerald-400" : "bg-rose-400"
+                                      }`}
+                                    />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Selected Case Details */}
+                          {questionTestCases[selectedCaseIdx] && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+                              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                                <div className="text-xxs uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                                  Input:
+                                </div>
+                                <pre className="text-slate-300 whitespace-pre-wrap">
+                                  {questionTestCases[selectedCaseIdx].input || "[Empty]"}
+                                </pre>
+                              </div>
+
+                              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                                <div className="text-xxs uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                                  Expected Output:
+                                </div>
+                                <pre className="text-emerald-400 whitespace-pre-wrap">
+                                  {questionTestCases[selectedCaseIdx].expectedOutput || "[Any]"}
+                                </pre>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Execution Result for Selected Case */}
+                          {executionReport?.results[selectedCaseIdx] && (
+                            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 font-mono text-xs space-y-1.5">
+                              <div className="flex justify-between items-center text-xxs font-sans">
+                                <span className="font-semibold text-slate-400">Actual Output:</span>
+                                <div className="flex items-center space-x-2">
+                                  {executionReport.results[selectedCaseIdx].time && (
+                                    <span className="text-slate-500">
+                                      Time: {executionReport.results[selectedCaseIdx].time}
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-xxs font-bold ${
+                                      executionReport.results[selectedCaseIdx].passed
+                                        ? "bg-emerald-500/20 text-emerald-300"
+                                        : "bg-rose-500/20 text-rose-300"
+                                    }`}
+                                  >
+                                    {executionReport.results[selectedCaseIdx].status}
+                                  </span>
+                                </div>
+                              </div>
+                              <pre className="text-slate-200 whitespace-pre-wrap bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                {executionReport.results[selectedCaseIdx].actualOutput || "[No stdout produced]"}
+                              </pre>
+                              {executionReport.results[selectedCaseIdx].error && (
+                                <div className="text-rose-400 text-xxs pt-1">
+                                  Error: {executionReport.results[selectedCaseIdx].error}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tab 2: Custom Stdin */}
+                  {activeTestTab === "custom" && (
+                    <div className="space-y-2">
+                      <div className="text-xxs text-slate-400">
+                        Input passed to standard input (stdin) during execution:
+                      </div>
+                      <textarea
+                        value={customStdin}
+                        onChange={(e) => setCustomStdin(e.target.value)}
+                        placeholder="Type custom test input here..."
+                        rows={3}
+                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* Tab 3: Console Output */}
+                  {activeTestTab === "output" && (
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs">
+                      <div className="text-xxs uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                        Standard Output & Diagnostics:
+                      </div>
+                      {executionReport ? (
+                        <pre className="text-slate-300 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                          {executionReport.results
+                            .map(
+                              (r) =>
+                                `[Case ${r.testIndex}] ${r.status} (${r.time || "0.0s"}):\n${
+                                  r.actualOutput || "[Empty]"
+                                }${r.error ? `\nError: ${r.error}` : ""}`
+                            )
+                            .join("\n\n")}
+                        </pre>
+                      ) : (
+                        <p className="text-slate-500 text-xs italic">
+                          Click "Run Code" to compile and execute your solution via Judge0 / Sandbox.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -544,13 +955,13 @@ export default function InterviewRoomPage() {
 
               <Button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isRunningCode}
                 className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl px-6 py-2.5 shadow-lg shadow-blue-600/30 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Interviewer is evaluating & thinking...
+                    Interviewer is evaluating solution...
                   </>
                 ) : (
                   <>
@@ -582,7 +993,7 @@ export default function InterviewRoomPage() {
                 </div>
                 <button
                   onClick={() => setIsHistoryDrawerOpen(false)}
-                  className="text-slate-400 hover:text-white p-1"
+                  className="text-slate-400 hover:text-white p-1 cursor-pointer"
                 >
                   ✕
                 </button>
@@ -607,9 +1018,14 @@ export default function InterviewRoomPage() {
                         <span className="text-xxs font-semibold text-slate-500 block mb-0.5">Your Response:</span>
                         {turn.userResponseText && <p className="whitespace-pre-line">{turn.userResponseText}</p>}
                         {turn.codeSubmission && (
-                          <pre className="font-mono text-xxs text-emerald-400 mt-1 overflow-x-auto">
+                          <pre className="font-mono text-xxs text-emerald-400 mt-1 overflow-x-auto p-2 bg-slate-950 rounded">
                             {turn.codeSubmission}
                           </pre>
+                        )}
+                        {turn.executionOutput && (
+                          <div className="mt-1 text-xxs font-mono text-blue-300">
+                            {turn.executionOutput}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -620,7 +1036,7 @@ export default function InterviewRoomPage() {
               <div className="pt-3 border-t border-slate-800">
                 <Button
                   onClick={() => setIsHistoryDrawerOpen(false)}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs"
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs cursor-pointer"
                 >
                   Close Transcript
                 </Button>

@@ -23,6 +23,7 @@ const submitResponseSchema = z.object({
   userResponseText: z.string().optional().default(""),
   codeSubmission: z.string().optional(),
   codeLanguage: z.string().optional().default("javascript"),
+  executionOutput: z.string().optional(),
 });
 
 export const getInterviews = async (
@@ -268,7 +269,8 @@ export const startSession = async (
         q.expected_points AS "expectedPoints", 
         q.category, 
         q.difficulty, 
-        q.code_starter_snippet AS "codeStarterSnippet"
+        q.code_starter_snippet AS "codeStarterSnippet",
+        q.test_cases AS "testCases"
        FROM interview_questions q
        WHERE q.session_id = $1
        ORDER BY q.question_order ASC`,
@@ -300,7 +302,8 @@ export const startSession = async (
 
       const reloadQ = await pool.query(
         `SELECT id, question_order AS "questionOrder", question_text AS "questionText", 
-                expected_points AS "expectedPoints", category, difficulty, code_starter_snippet AS "codeStarterSnippet"
+                expected_points AS "expectedPoints", category, difficulty, code_starter_snippet AS "codeStarterSnippet",
+                test_cases AS "testCases"
          FROM interview_questions WHERE session_id = $1 ORDER BY question_order ASC`,
         [id]
       );
@@ -355,10 +358,12 @@ export const getSessionTurns = async (
         q.category,
         q.difficulty,
         q.code_starter_snippet AS "codeStarterSnippet",
+        q.test_cases AS "testCases",
         r.id AS "responseId",
         r.user_response_text AS "userResponseText",
         r.code_submission AS "codeSubmission",
         r.code_language AS "codeLanguage",
+        r.execution_output AS "executionOutput",
         r.created_at AS "answeredAt"
        FROM interview_questions q
        LEFT JOIN responses r ON q.id = r.question_id
@@ -396,7 +401,7 @@ export const submitResponseAndGetNext = async (
     }
 
     const validatedData = submitResponseSchema.parse(req.body);
-    const { questionId, userResponseText, codeSubmission, codeLanguage } = validatedData;
+    const { questionId, userResponseText, codeSubmission, codeLanguage, executionOutput } = validatedData;
 
     // Verify session belongs to user
     const sessionRes = await pool.query(
@@ -415,10 +420,10 @@ export const submitResponseAndGetNext = async (
     // 1. Record candidate response in database
     const responseInsert = await pool.query(
       `INSERT INTO responses 
-        (question_id, session_id, user_response_text, code_submission, code_language)
-       VALUES ($1, $2, $3, $4, $5)
+        (question_id, session_id, user_response_text, code_submission, code_language, execution_output)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, created_at AS "createdAt"`,
-      [questionId, sessionId, userResponseText, codeSubmission || null, codeLanguage]
+      [questionId, sessionId, userResponseText, codeSubmission || null, codeLanguage, executionOutput || null]
     );
 
     const savedResponse = responseInsert.rows[0];
@@ -487,8 +492,8 @@ export const submitResponseAndGetNext = async (
     // 5. Persist the new question into interview_questions
     const newQInsert = await pool.query(
       `INSERT INTO interview_questions 
-        (session_id, question_order, question_text, expected_points, category, difficulty, code_starter_snippet)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (session_id, question_order, question_text, expected_points, category, difficulty, code_starter_snippet, test_cases)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING 
         id, 
         question_order AS "questionOrder", 
@@ -496,7 +501,8 @@ export const submitResponseAndGetNext = async (
         expected_points AS "expectedPoints", 
         category, 
         difficulty, 
-        code_starter_snippet AS "codeStarterSnippet"`,
+        code_starter_snippet AS "codeStarterSnippet",
+        test_cases AS "testCases"`,
       [
         sessionId,
         nextQData.questionOrder,
@@ -505,6 +511,7 @@ export const submitResponseAndGetNext = async (
         nextQData.category,
         nextQData.difficulty,
         nextQData.codeStarterSnippet || null,
+        JSON.stringify(nextQData.testCases || []),
       ]
     );
 

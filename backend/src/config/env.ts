@@ -33,7 +33,10 @@ export const config = {
   // CORS
   CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000",
   
-  // Future AI & Code execution services
+  // AI & Code execution services
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
   JUDGE0_API_KEY: process.env.JUDGE0_API_KEY || "",
+  JUDGE0_API_URL: process.env.JUDGE0_API_URL || "https://judge0-ce.p.rapidapi.com",
+  JUDGE0_API_HOST: process.env.JUDGE0_API_HOST || "judge0-ce.p.rapidapi.com",
 };
+

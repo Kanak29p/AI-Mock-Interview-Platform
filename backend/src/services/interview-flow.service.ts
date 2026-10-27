@@ -19,6 +19,7 @@ export interface NextQuestionResult {
   category: string;
   difficulty: string;
   codeStarterSnippet?: string;
+  testCases?: Array<{ input: string; expectedOutput: string }>;
   interviewerFeedbackSnippet?: string;
   isCompleted: boolean;
 }
@@ -83,7 +84,7 @@ CURRENT TASK:
 2. Generate Question ${nextOrder} of ${maxTurns}.
    - The question must logically progress the interview.
    - If the candidate mentioned a specific technology or decision, ask a thoughtful follow-up probe OR transition to an important competency for ${roleTitle} (e.g. system reliability, edge cases, scalability, or collaboration).
-   - If round is "coding", provide algorithmic problem with starter code snippet.
+   - If round is "coding", provide an algorithmic problem with starter code snippet AND 1-3 test cases in "testCases".
 3. Set "isCompleted": false.
 
 Respond ONLY with valid JSON in this exact structure:
@@ -94,6 +95,7 @@ Respond ONLY with valid JSON in this exact structure:
   "category": "Topic category",
   "difficulty": "${difficulty}",
   "codeStarterSnippet": "Optional code starter",
+  "testCases": [{"input": "sample input", "expectedOutput": "expected output"}],
   "interviewerFeedbackSnippet": "Brief 1-sentence acknowledgment of previous answer",
   "isCompleted": false
 }`;
