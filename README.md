@@ -43,10 +43,37 @@ An intelligent, full-stack AI Mock Interview platform designed to help candidate
   - Selection of attached resume for RAG question tailoring.
   - Creation of session via `POST /api/interviews`.
 
-### ⏳ Coming in Phase 3: AI Interview Room & Live Session Engine
-- Real-time conversational interview loop with Google Gemini API.
-- Question generation conditioned on candidate resume context via RAG.
-- Speech-to-Text (STT) and candidate voice response capture.
+### ✅ Phase 3: Resume Ingestion + RAG Pipeline
+- **Section-Aware Resume Chunking**:
+  - Splits resumes into semantic passages (`Experience`, `Projects`, `Skills`, `Education`) with text windowing.
+  - Stores chunked passages in the `resume_chunks` table linked to candidate resumes.
+- **Vector Embeddings with `pgvector`**:
+  - Generates 768-dimension dense vector representations via Gemini API (`text-embedding-004`).
+  - Includes offline fallback generator to guarantee local and Docker development without crashes.
+- **Semantic Vector Retrieval Function**:
+  - Vector cosine distance search (`<=>` operator) retrieving the top matching resume chunks for any technical topic.
+  - `POST /api/resumes/:id/search` allowing real-time testing of vector retrieval with similarity scores.
+- **Interactive RAG Search Visualizer**:
+  - In-app visualizer modal to query resume chunks directly from PostgreSQL in real time.
+
+### ✅ Phase 4: Mock Interview Room & Dynamic Conversational Turns
+- **Live Mock Interview Room (`/interview/[id]`)**:
+  - Dynamic route presenting the current active question, turn counter (e.g. Turn 2 of 5), category badge, and difficulty indicator.
+  - Responsive text-based answer workspace with word/character counter.
+  - Code Editor workspace with language selection for technical/coding problems.
+  - Text-to-Speech (TTS) audio hook to read questions aloud.
+  - Architectural plug-in indicators & hooks for Audio/Video STT (Whisper / Web Speech API) and Camera streams.
+  - Transcript history drawer displaying all completed Q&A turns in chronological order.
+  - Completed session celebration screen.
+- **Turn-by-Turn Dynamic Gemini Generation**:
+  - `POST /api/interviews/:id/respond`: Records candidate response in `responses` table, evaluates turn context, and triggers Gemini (`gemini-2.5-flash`) to generate the next logical follow-up question conditioned on resume context and conversation history.
+  - Automatically advances turns until the target number of questions is reached, transitioning the session to `completed`.
+  - `POST /api/interviews/:id/start`, `GET /api/interviews/:id/turns`, and `POST /api/interviews/:id/complete`.
+
+### ⏳ Coming in Phase 5: Feedback, Scoring & Analytics Engine
+- Post-interview comprehensive rubric evaluation (technical accuracy, communication, structure).
+- Strengths and areas for improvement breakdown.
+- PDF performance report export.
 
 ---
 
@@ -77,8 +104,8 @@ cp .env.example .env
 | `JWT_REFRESH_SECRET` | Secret key for signing refresh tokens | Minimum 32 characters random string |
 | `JWT_EXPIRES_IN` | Access token lifespan | `1h` |
 | `JWT_REFRESH_EXPIRES_IN`| Refresh token lifespan | `7d` |
-| `GEMINI_API_KEY` | *(Required for Phase 3)* Google Gemini API Key | Get from [Google AI Studio](https://aistudio.google.com) |
-| `JUDGE0_API_KEY` | *(Required for Phase 4)* Judge0 API Key | RapidAPI or self-hosted Judge0 |
+| `GEMINI_API_KEY` | Google Gemini API Key for Embeddings & Questions | Get from [Google AI Studio](https://aistudio.google.com) |
+| `JUDGE0_API_KEY` | *(Required for Judge0 code execution)* Judge0 API Key | RapidAPI or self-hosted Judge0 |
 
 ---
 
@@ -102,7 +129,7 @@ cp .env.example .env
 
 ### Option B: Running Locally without Docker
 
-1. Ensure PostgreSQL and Redis are running locally.
+1. Ensure PostgreSQL (with pgvector) and Redis are running locally.
 2. In `backend/`:
    ```bash
    npm run migrate    # Apply database schema
@@ -124,12 +151,19 @@ cp .env.example .env
 * `GET /api/auth/me` — Authenticated profile (Bearer Token)
 * `GET /api/health` — PostgreSQL and Redis connectivity status
 
-### Resumes (`/api/resumes`)
+### Resumes & RAG (`/api/resumes`)
 * `GET /api/resumes` — List candidate's uploaded resumes and detected skills
-* `POST /api/resumes/upload` — Upload PDF/TXT resume (multipart/form-data)
-* `DELETE /api/resumes/:id` — Delete a resume
+* `POST /api/resumes/upload` — Upload PDF/TXT resume, chunk into passages, and index vector embeddings in pgvector
+* `POST /api/resumes/:id/search` — Perform cosine vector similarity search against resume chunks (`{ query: string, limit?: number }`)
+* `DELETE /api/resumes/:id` — Delete a resume and its indexed chunks
 
-### Interviews (`/api/interviews`)
+### Interview Session & Live Room (`/api/interviews`)
 * `GET /api/interviews` — List candidate's past and scheduled interview sessions
-* `POST /api/interviews` — Schedule a new interview session (`roleTitle`, `difficulty`, `interviewType`, `resumeId`)
+* `POST /api/interviews` — Schedule a new interview session and auto-generate questions via RAG
 * `GET /api/interviews/:id` — Retrieve details for a specific interview session
+* `POST /api/interviews/:id/start` — Start/resume interview session and retrieve active question
+* `GET /api/interviews/:id/turns` — Retrieve chronological Q&A transcript history
+* `POST /api/interviews/:id/respond` — Submit candidate response and dynamically generate next Gemini question
+* `POST /api/interviews/:id/complete` — Conclude interview session early or on completion
+* `POST /api/interviews/:id/generate-questions` — Regenerate tailored questions with Gemini & RAG
+* `GET /api/interviews/:id/questions` — Retrieve generated questions for an interview session

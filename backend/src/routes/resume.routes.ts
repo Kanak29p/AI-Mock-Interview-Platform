@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { uploadResume, getResumes, deleteResume } from "../controllers/resume.controller";
+import { uploadResume, getResumes, deleteResume, searchResume } from "../controllers/resume.controller";
 import { authenticateToken } from "../middleware/auth.middleware";
 
 const router = Router();
@@ -16,6 +16,7 @@ router.use(authenticateToken);
 
 router.get("/", getResumes);
 router.post("/upload", upload.single("resume"), uploadResume);
+router.post("/:id/search", searchResume);
 router.delete("/:id", deleteResume);
 
 export default router;

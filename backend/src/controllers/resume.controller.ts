@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { PDFParse } from "pdf-parse";
 import { pool } from "../config/db";
+import { indexResumeWithEmbeddings, retrieveRelevantResumeContext } from "../services/rag.service";
 
 // Common tech keywords to extract from resumes
 const TECH_SKILLS = [
@@ -74,11 +75,61 @@ export const uploadResume = async (
 
     const newResume = result.rows[0];
 
+    // Generate embeddings and index semantic chunks for RAG
+    let indexedChunks = 0;
+    try {
+      indexedChunks = await indexResumeWithEmbeddings(newResume.id, userId, rawText);
+    } catch (embedErr) {
+      console.warn("Could not index resume chunks with embeddings:", embedErr);
+    }
+
     res.status(201).json({
       success: true,
-      message: "Resume uploaded and parsed successfully",
+      message: "Resume uploaded, parsed, and embedded for RAG successfully",
       data: {
-        resume: newResume,
+        resume: {
+          ...newResume,
+          indexedChunks,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const searchResume = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { id } = req.params;
+    const { query, limit } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({ success: false, message: "Search query is required" });
+      return;
+    }
+
+    const matches = await retrieveRelevantResumeContext(
+      userId,
+      id,
+      query,
+      typeof limit === "number" ? limit : 3
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        query,
+        matches,
       },
     });
   } catch (error) {

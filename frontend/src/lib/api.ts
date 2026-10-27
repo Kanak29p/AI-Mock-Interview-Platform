@@ -210,7 +210,54 @@ export const resumeApi = {
       method: "DELETE",
     });
   },
+
+  searchResume: async (
+    id: string,
+    query: string,
+    limit = 3
+  ): Promise<{ success: boolean; data: { query: string; matches: RetrievedChunk[] } }> => {
+    return request<{ success: boolean; data: { query: string; matches: RetrievedChunk[] } }>(
+      `/api/resumes/${id}/search`,
+      {
+        method: "POST",
+        body: JSON.stringify({ query, limit }),
+      }
+    );
+  },
 };
+
+export interface RetrievedChunk {
+  id: string;
+  sectionTitle: string;
+  content: string;
+  similarity: number;
+}
+
+export interface InterviewQuestion {
+  id: string;
+  questionOrder: number;
+  questionText: string;
+  expectedPoints: string[];
+  category: string;
+  difficulty: string;
+  codeStarterSnippet?: string;
+  createdAt?: string;
+}
+
+export interface ConversationTurn {
+  questionId: string;
+  questionOrder: number;
+  questionText: string;
+  expectedPoints?: string[];
+  category: string;
+  difficulty?: string;
+  codeStarterSnippet?: string;
+  responseId?: string;
+  userResponseText?: string;
+  codeSubmission?: string;
+  codeLanguage?: string;
+  answeredAt?: string;
+}
 
 export const interviewApi = {
   getInterviews: async (): Promise<{ success: boolean; data: { interviews: InterviewSession[] } }> => {
@@ -236,6 +283,87 @@ export const interviewApi = {
   ): Promise<{ success: boolean; data: { interview: InterviewSession } }> => {
     return request<{ success: boolean; data: { interview: InterviewSession } }>(`/api/interviews/${id}`, {
       method: "GET",
+    });
+  },
+
+  getQuestions: async (
+    id: string
+  ): Promise<{ success: boolean; data: { questions: InterviewQuestion[] } }> => {
+    return request<{ success: boolean; data: { questions: InterviewQuestion[] } }>(
+      `/api/interviews/${id}/questions`,
+      {
+        method: "GET",
+      }
+    );
+  },
+
+  generateQuestions: async (
+    id: string
+  ): Promise<{
+    success: boolean;
+    data: { sessionId: string; questions: InterviewQuestion[]; retrievedContext: RetrievedChunk[] };
+  }> => {
+    return request<{
+      success: boolean;
+      data: { sessionId: string; questions: InterviewQuestion[]; retrievedContext: RetrievedChunk[] };
+    }>(`/api/interviews/${id}/generate-questions`, {
+      method: "POST",
+    });
+  },
+
+  startSession: async (
+    id: string
+  ): Promise<{
+    success: boolean;
+    data: {
+      session: InterviewSession;
+      currentQuestion: InterviewQuestion;
+      totalQuestionsCount: number;
+      answeredCount: number;
+    };
+  }> => {
+    return request(`/api/interviews/${id}/start`, {
+      method: "POST",
+    });
+  },
+
+  getSessionTurns: async (
+    id: string
+  ): Promise<{ success: boolean; data: { turns: ConversationTurn[] } }> => {
+    return request(`/api/interviews/${id}/turns`, {
+      method: "GET",
+    });
+  },
+
+  submitResponse: async (
+    id: string,
+    payload: {
+      questionId: string;
+      userResponseText: string;
+      codeSubmission?: string;
+      codeLanguage?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    data: {
+      responseId: string;
+      isCompleted: boolean;
+      turnsCount: number;
+      interviewerFeedbackSnippet?: string;
+      nextQuestion?: InterviewQuestion | null;
+    };
+  }> => {
+    return request(`/api/interviews/${id}/respond`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  completeSession: async (
+    id: string
+  ): Promise<{ success: boolean; data: { session: InterviewSession } }> => {
+    return request(`/api/interviews/${id}/complete`, {
+      method: "POST",
     });
   },
 };
