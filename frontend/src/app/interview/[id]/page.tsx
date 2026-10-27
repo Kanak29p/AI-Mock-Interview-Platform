@@ -444,21 +444,33 @@ export default function InterviewRoomPage() {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Button
-              onClick={() => setIsHistoryDrawerOpen(true)}
-              variant="outline"
-              className="flex-1 border-slate-800 hover:bg-slate-800 text-slate-200 text-xs py-2.5 rounded-xl cursor-pointer"
-            >
-              <History className="h-4 w-4 mr-2 text-blue-400" />
-              Review Transcript
-            </Button>
-            <Link href="/dashboard" className="flex-1">
-              <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2.5 rounded-xl shadow-lg shadow-blue-600/30 cursor-pointer">
-                Return to Dashboard
-                <ChevronRight className="h-4 w-4 ml-1" />
+          <div className="space-y-2 pt-2">
+            <Link href={`/interview/${sessionId}/feedback`} className="block w-full">
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-3 rounded-xl shadow-lg shadow-emerald-600/30 cursor-pointer flex items-center justify-center">
+                <Sparkles className="h-4 w-4 mr-2" />
+                <span>View Full Feedback & Evaluation Report</span>
+                <ChevronRight className="h-4 w-4 ml-1.5" />
               </Button>
             </Link>
+
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <Button
+                onClick={() => setIsHistoryDrawerOpen(true)}
+                variant="outline"
+                className="flex-1 border-slate-800 hover:bg-slate-800 text-slate-200 text-xs py-2.5 rounded-xl cursor-pointer"
+              >
+                <History className="h-4 w-4 mr-2 text-blue-400" />
+                Review Transcript
+              </Button>
+              <Link href="/dashboard" className="flex-1">
+                <Button
+                  variant="outline"
+                  className="w-full border-slate-800 hover:bg-slate-800 text-slate-200 text-xs py-2.5 rounded-xl cursor-pointer"
+                >
+                  Return to Dashboard
+                </Button>
+              </Link>
+            </div>
           </div>
         </motion.div>
       </div>

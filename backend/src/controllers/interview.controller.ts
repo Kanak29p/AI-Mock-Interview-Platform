@@ -10,6 +10,10 @@ import {
   generateNextInterviewQuestion,
   ConversationTurn,
 } from "../services/interview-flow.service";
+import {
+  evaluateInterviewSession,
+  getSessionFeedback,
+} from "../services/evaluation.service";
 
 const createInterviewSchema = z.object({
   roleTitle: z.string().min(2, "Role title must be at least 2 characters"),
@@ -560,6 +564,11 @@ export const completeSession = async (
       return;
     }
 
+    // Trigger background evaluation so feedback report is ready immediately
+    evaluateInterviewSession(sessionId, userId).catch((evalErr) => {
+      console.warn("Background evaluation notice:", evalErr?.message || evalErr);
+    });
+
     res.status(200).json({
       success: true,
       message: "Interview session concluded successfully",
@@ -687,3 +696,65 @@ export const getQuestionsHandler = async (
     next(error);
   }
 };
+
+/**
+ * Trigger structured evaluation & scoring with Gemini
+ * POST /api/interviews/:id/evaluate
+ */
+export const evaluateSessionHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { id: sessionId } = req.params;
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    const feedback = await evaluateInterviewSession(sessionId, userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Session evaluated successfully",
+      data: {
+        feedback,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieve feedback and structured score report for an interview session
+ * GET /api/interviews/:id/feedback
+ */
+export const getFeedbackHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { id: sessionId } = req.params;
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    const data = await getSessionFeedback(sessionId, userId);
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

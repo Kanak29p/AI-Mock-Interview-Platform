@@ -9,6 +9,8 @@ import {
   getSessionTurns,
   submitResponseAndGetNext,
   completeSession,
+  evaluateSessionHandler,
+  getFeedbackHandler,
 } from "../controllers/interview.controller";
 import { authenticateToken } from "../middleware/auth.middleware";
 
@@ -23,6 +25,8 @@ router.post("/:id/start", startSession);
 router.get("/:id/turns", getSessionTurns);
 router.post("/:id/respond", submitResponseAndGetNext);
 router.post("/:id/complete", completeSession);
+router.post("/:id/evaluate", evaluateSessionHandler);
+router.get("/:id/feedback", getFeedbackHandler);
 router.post("/:id/generate-questions", generateQuestionsHandler);
 router.get("/:id/questions", getQuestionsHandler);
 

@@ -29,6 +29,7 @@ import {
   Search,
   RefreshCw,
   HelpCircle,
+  History,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -536,25 +537,47 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
-                          onClick={() => handleViewQuestions(session)}
-                        >
-                          <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-400" />
-                          <span>Questions</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl cursor-pointer"
-                          onClick={() => router.push(`/interview/${session.id}`)}
-                        >
-                          <span>Launch</span>
-                          <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                        </Button>
-                      </div>
+                      {session.status === "completed" ? (
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
+                            onClick={() => router.push(`/interview/${session.id}`)}
+                          >
+                            <History className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                            <span>Room</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="w-full text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl cursor-pointer shadow-md shadow-emerald-600/20"
+                            onClick={() => router.push(`/interview/${session.id}/feedback`)}
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                            <span>Feedback</span>
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs border-slate-800 hover:bg-slate-800 text-slate-300 font-medium rounded-xl cursor-pointer"
+                            onClick={() => handleViewQuestions(session)}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                            <span>Questions</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl cursor-pointer"
+                            onClick={() => router.push(`/interview/${session.id}`)}
+                          >
+                            <span>Launch</span>
+                            <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
