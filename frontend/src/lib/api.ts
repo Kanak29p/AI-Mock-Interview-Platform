@@ -233,6 +233,40 @@ export interface RetrievedChunk {
   similarity: number;
 }
 
+export interface TestCase {
+  input: string;
+  expectedOutput: string;
+}
+
+export interface TestCaseResult {
+  testIndex: number;
+  input: string;
+  expectedOutput: string;
+  actualOutput: string | null;
+  status: string;
+  passed: boolean;
+  time?: string | null;
+  memory?: number | null;
+  error?: string | null;
+}
+
+export interface BatchExecutionReport {
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  executionMode: "judge0" | "sandbox_fallback";
+  results: TestCaseResult[];
+}
+
+export interface SupportedLanguage {
+  id: number;
+  key: string;
+  label: string;
+  monacoLanguage: string;
+  defaultStarter: string;
+}
+
 export interface InterviewQuestion {
   id: string;
   questionOrder: number;
@@ -241,6 +275,7 @@ export interface InterviewQuestion {
   category: string;
   difficulty: string;
   codeStarterSnippet?: string;
+  testCases?: TestCase[];
   createdAt?: string;
 }
 
@@ -252,10 +287,12 @@ export interface ConversationTurn {
   category: string;
   difficulty?: string;
   codeStarterSnippet?: string;
+  testCases?: TestCase[];
   responseId?: string;
   userResponseText?: string;
   codeSubmission?: string;
   codeLanguage?: string;
+  executionOutput?: string;
   answeredAt?: string;
 }
 
@@ -342,6 +379,7 @@ export const interviewApi = {
       userResponseText: string;
       codeSubmission?: string;
       codeLanguage?: string;
+      executionOutput?: string;
     }
   ): Promise<{
     success: boolean;
@@ -367,3 +405,25 @@ export const interviewApi = {
     });
   },
 };
+
+export const codeApi = {
+  runCode: async (payload: {
+    sourceCode: string;
+    language: string;
+    stdin?: string;
+    expectedOutput?: string;
+    testCases?: TestCase[];
+  }): Promise<{ success: boolean; data: BatchExecutionReport }> => {
+    return request<{ success: boolean; data: BatchExecutionReport }>("/api/code/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getLanguages: async (): Promise<{ success: boolean; data: { languages: SupportedLanguage[] } }> => {
+    return request<{ success: boolean; data: { languages: SupportedLanguage[] } }>("/api/code/languages", {
+      method: "GET",
+    });
+  },
+};
+

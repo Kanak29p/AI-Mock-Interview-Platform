@@ -70,10 +70,28 @@ An intelligent, full-stack AI Mock Interview platform designed to help candidate
   - Automatically advances turns until the target number of questions is reached, transitioning the session to `completed`.
   - `POST /api/interviews/:id/start`, `GET /api/interviews/:id/turns`, and `POST /api/interviews/:id/complete`.
 
-### ⏳ Coming in Phase 5: Feedback, Scoring & Analytics Engine
-- Post-interview comprehensive rubric evaluation (technical accuracy, communication, structure).
-- Strengths and areas for improvement breakdown.
-- PDF performance report export.
+### ✅ Phase 5: Coding Round (Monaco Editor & Judge0 Integration)
+- **Monaco Code Editor Embedded in Interview Room**:
+  - Full-featured Monaco editor (`vs-dark` theme, font configuration, line numbers, automatic layout).
+  - Multi-language support: JavaScript (Node.js), TypeScript, Python 3, Java (OpenJDK), C++ (GCC), Go.
+  - Per-language starter templates and live reset to problem starter snippet.
+- **Judge0 API Integration & Sandboxed Fallback**:
+  - `POST /api/code/run`: Submits code to Judge0 CE (RapidAPI or public endpoint) against stdin and test cases.
+  - Resilient local sandbox runner for JavaScript/TypeScript and simulated execution when Judge0 API key is not configured or offline.
+  - `GET /api/code/languages`: Dynamic endpoint returning supported Judge0 language IDs, syntax modes, and boilerplates.
+- **Batch Test Cases Runner & Verification UI**:
+  - Dynamic algorithmic questions generated with 1–3 test cases persisted in `interview_questions.test_cases` (JSONB).
+  - Interactive Test Cases panel in interview room:
+    - Test Cases tab: individual case selector, input, expected output, actual output, status badge (Accepted, Wrong Answer, Runtime Error), execution time, and memory.
+    - Custom Stdin tab: execute code against arbitrary candidate-provided inputs.
+    - Execution Output tab: direct console stdout, stderr, and compiler diagnostics.
+  - Run Code action allows candidates to test and verify their solution before submitting to the interviewer.
+  - Response submissions record code, language, and execution results directly into the `responses` table.
+
+### ⏳ Coming in Phase 6: Feedback, Scoring Rubrics & Performance Report
+- Post-interview comprehensive 3-pillar rubric evaluation (Technical accuracy, STAR communication structure, Overall score 0–100).
+- Detailed strengths, improvement areas, and concrete actionable suggestions.
+- Interactive Feedback Report page (`/interview/[id]/feedback`).
 
 ---
 

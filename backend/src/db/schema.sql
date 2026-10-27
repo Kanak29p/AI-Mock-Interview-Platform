@@ -77,8 +77,11 @@ CREATE TABLE IF NOT EXISTS interview_questions (
     category VARCHAR(100),
     difficulty VARCHAR(50),
     code_starter_snippet TEXT,
+    test_cases JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE interview_questions ADD COLUMN IF NOT EXISTS test_cases JSONB DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_interview_questions_session ON interview_questions(session_id);
 
